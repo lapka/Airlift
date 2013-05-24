@@ -7,7 +7,23 @@
 #import "AirSignalProcessor.h"
 
 
-@interface AirMessage : NSObject
+@interface AirMessage : NSObject {
+	UInt32 *_data;
+}
++ (AirMessage *)testMessage;
+- (id)initWithData:(UInt32 *)data;
+- (UInt32 *)data;
+@end
+
+
+@interface AirBuffer : NSObject {
+	UInt32 *_parallelBuffer_one;
+	UInt32 *_parallelBuffer_two;
+	UInt32 *_parallelBuffer_three;
+	UInt32 *_parallelBuffer_four;
+}
+- (void)pushAirBit:(AirBit *)airBit;
+- (AirBit *)airBitAtIndex:(int)index;
 @end
 
 
@@ -18,10 +34,13 @@
 @end
 
 
-@interface AirListener : NSObject <AirSignalProcessorDelegate>
+@interface AirListener : NSObject <AirSignalProcessorDelegate> {
+	AirMessage *_testMessage;
+}
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
 @property (nonatomic, weak) NSObject <AirListenerDelegate> *delegate;
+@property (nonatomic, strong) AirBuffer *buffer;
 @property BOOL isListening;
 
 - (void)startListen;

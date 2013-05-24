@@ -102,13 +102,13 @@ OSStatus RenderAudio(
 				
 				printf("-- %u shift step, ", shiftStep);
 				
-				// get shifted step bit range
+				// get step data bit range
 				Float64 shiftDuration = (stepTimeDuration / 4) * shiftStep;
-				NSRange shiftedStepBitRange = [signalProcessor stepBitRangeWithStartTime:(currentStepStartTime + shiftDuration)];
+				NSRange stepDataBitRange = [signalProcessor stepDataBitRangeWithStartTime:(currentStepStartTime + shiftDuration)];
 				
 				// obtain step data
-				for (int i = 0; i < shiftedStepBitRange.length; i++) {
-					UInt32 globalIndex = shiftedStepBitRange.location + i;
+				for (int i = 0; i < stepDataBitRange.length; i++) {
+					UInt32 globalIndex = stepDataBitRange.location + i;
 					UInt32 buffetIndex = globalIndex - bufferBitRange.location;
 					stepData[i] = buffer[buffetIndex];
 				}
@@ -160,21 +160,21 @@ OSStatus RenderAudio(
 
 - (id)init {
 	if ((self = [super init])) {
-		self.shiftedBits = [NSMutableArray arrayWithObjects:@0, @0, @0, @0, nil];
+		_shiftedBits = (UInt32 *) malloc(defaultShiftSteps * sizeof(UInt32));
 	}
 	return self;
 }
 
 - (void)dealloc {
-	self.shiftedBits = nil;
+	free(_shiftedBits);
 }
 
 - (void)setBit:(UInt32)bit forShiftIndex:(UInt32)shiftIndex {
-	[_shiftedBits replaceObjectAtIndex:shiftIndex withObject:[NSNumber numberWithInt:bit]];
+	_shiftedBits[shiftIndex] = bit;
 }
 
 - (UInt32)bitWithShiftIndex:(UInt32)shiftIndex {
-	return [(NSNumber *)[_shiftedBits objectAtIndex:shiftIndex] integerValue];
+	return _shiftedBits[shiftIndex];
 }
 
 @end
@@ -199,8 +199,12 @@ OSStatus RenderAudio(
 		NSLog(@"sampleRate: %g", _sampleRate);
 		NSLog(@"stepFrequency: %g", _stepFrequency);
 		NSLog(@"stepBitLength: %u", (unsigned int)_stepBitLength);
+		NSLog(@"stepDataBitLength: %u", (unsigned int)_stepDataBitLength);
 		NSLog(@"bufferBitLength: %u", (unsigned int)_bufferBitLength);
 		NSLog(@"---");
+		
+//		NSLog(@"zeroBitFrequency: %g, optimized: %g", zeroBitFrequency, [self optimizeFrequency:zeroBitFrequency withNumberOfFrames:_stepDataBitLength]);
+//		NSLog(@"oneBitFrequency:  %g, optimized: %g", oneBitFrequency,  [self optimizeFrequency:oneBitFrequency withNumberOfFrames:_stepDataBitLength]);
 		
 		// refactor: check if you really have to create AudioUnit and all this stuff in init. probably don't have
 		
@@ -208,12 +212,12 @@ OSStatus RenderAudio(
 		
 		
 		// SETUP FFT
-		self.fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepBitLength];
+		self.fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength];
 		self.fftAnalyzer.sampleRate = _sampleRate;
 		
 
 		_buffer = (Float32 *) malloc(_bufferBitLength * sizeof(Float32));
-		_stepData = (Float32 *) malloc(_stepBitLength * sizeof(Float32));
+		_stepData = (Float32 *) malloc(_stepDataBitLength * sizeof(Float32));
 		
 		// reset counters
 		_bufferBitRange.location = 0;
@@ -372,7 +376,8 @@ OSStatus RenderAudio(
 
 - (void)setSampleRate:(float)sampleRate {
 	_sampleRate = sampleRate;
-	_stepBitLength = [self stepBitLengthWithSampleRate:_sampleRate stepFrequency:_stepFrequency];
+	_stepBitLength = [self stepBitLengthWithSampleRate:_sampleRate stepFrequency:_stepFrequency optimizedForFFT:NO];
+	_stepDataBitLength = [self stepBitLengthWithSampleRate:_sampleRate stepFrequency:_stepFrequency optimizedForFFT:YES];
 	_bufferBitLength = [self bufferLengthWithStepBitLength:_stepBitLength packetLength:defaultPacketLength];
 }
 
@@ -380,7 +385,8 @@ OSStatus RenderAudio(
 - (void)setStepFrequency:(double)stepFrequency {
 	_stepFrequency = stepFrequency;
 	_stepTimeDuration = 1.0 / stepFrequency;
-	_stepBitLength = [self stepBitLengthWithSampleRate:_sampleRate stepFrequency:_stepFrequency];
+	_stepBitLength = [self stepBitLengthWithSampleRate:_sampleRate stepFrequency:_stepFrequency optimizedForFFT:NO];
+	_stepDataBitLength = [self stepBitLengthWithSampleRate:_sampleRate stepFrequency:_stepFrequency optimizedForFFT:YES];
 	_bufferBitLength = [self bufferLengthWithStepBitLength:_stepBitLength packetLength:defaultPacketLength];
 }
 
@@ -389,11 +395,19 @@ OSStatus RenderAudio(
 #pragma mark Utilities
 
 
-- (UInt32)stepBitLengthWithSampleRate:(double)sampleRate stepFrequency:(double)stepFrequency {
+- (UInt32)stepBitLengthWithSampleRate:(double)sampleRate stepFrequency:(double)stepFrequency optimizedForFFT:(BOOL)optimizedForFFT {
 	
 	if (stepFrequency == 0) return 0;
 	
-	UInt32 stepBitLength = round(sampleRate / stepFrequency);
+	int stepBitLength = round(sampleRate / stepFrequency);
+	
+	if (optimizedForFFT) {
+		int log2length = log2(stepBitLength);
+		int twoInLog2lengthPower = pow(2.0, log2length);
+		stepBitLength = twoInLog2lengthPower;
+	}
+	NSLog(@"stepBitLength: %d", stepBitLength);
+	
 	return stepBitLength;
 }
 
@@ -416,14 +430,23 @@ OSStatus RenderAudio(
 }
 
 
-- (NSRange)bufferBitRangeWithStartTime:(Float64)startTime  {
+- (NSRange)stepDataBitRangeWithStartTime:(Float64)startTime {
 	
 	static Float64 oneBitTimeLength = 1.0 / defaultSampleRate;
 	
-	NSRange stepBitRange;
-	stepBitRange.location = floor(startTime / oneBitTimeLength);
-	stepBitRange.length = _stepBitLength;
-	return stepBitRange;
+	NSRange stepDataBitRange;
+	stepDataBitRange.location = floor(startTime / oneBitTimeLength);
+	stepDataBitRange.length = _stepDataBitLength;
+	return stepDataBitRange;
+}
+
+
+- (double)optimizeFrequency:(double)frequency withNumberOfFrames:(int)numberOfFrames {
+	
+	int frequency_bin = round(frequency * numberOfFrames / self.sampleRate);
+	double optimizedFrequency = frequency_bin * self.sampleRate / numberOfFrames;
+	
+	return optimizedFrequency;
 }
 
 

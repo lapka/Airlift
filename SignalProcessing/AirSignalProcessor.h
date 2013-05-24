@@ -9,8 +9,9 @@
 #import "AirSignalFFTAnalyzer.h"
 
 
-@interface AirBit : NSObject
-@property (nonatomic, strong) NSMutableArray *shiftedBits;
+@interface AirBit : NSObject {
+	UInt32 *_shiftedBits;
+}
 - (void)setBit:(UInt32)bit forShiftIndex:(UInt32)shiftIndex;
 - (UInt32)bitWithShiftIndex:(UInt32)shiftIndex;
 @end
@@ -36,6 +37,7 @@
 	Float64 _stepTimeDuration;
 	
 	UInt32 _stepBitLength;
+	UInt32 _stepDataBitLength; // optimized for fft
 	UInt32 _bufferBitLength;
 }
 
@@ -51,5 +53,6 @@
 
 // Utilities
 - (NSRange)stepBitRangeWithStartTime:(Float64)startTime;
+- (NSRange)stepDataBitRangeWithStartTime:(Float64)startTime;
 
 @end
