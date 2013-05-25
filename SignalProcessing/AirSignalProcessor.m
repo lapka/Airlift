@@ -33,7 +33,7 @@ OSStatus RenderAudio(
 					 AudioBufferList 			*ioData)
 
 {
-	NSLog(@"----- Render ------");
+	NSLog(@"\n\n----- Render ------");
 	
 	// Get signal processor
 	AirSignalProcessor *signalProcessor = (__bridge AirSignalProcessor *)inRefCon;
@@ -60,7 +60,6 @@ OSStatus RenderAudio(
 	// Get input data
 	Float32 *samples = (Float32*)(ioData->mBuffers[0].mData);
 	
-	
 	// Add input data to buffer
 	for (UInt32 i=0; i<inNumberFrames; i++) {
 		buffer[bufferBitRange.length+i] = samples[i];
@@ -73,20 +72,20 @@ OSStatus RenderAudio(
 	BOOL isBufferFullEnoughForStep = YES;
 	while (isBufferFullEnoughForStep) {
 	
-		NSLog(@"%d step", (unsigned int)currentStep);
-		NSLog(@"buffer bit range: (%u, %u)", bufferBitRange.location, bufferBitRange.length);
+		printf("\n%d step\n", (unsigned int)currentStep);
+		printf("buffer bit range: (%u, %u)\n", bufferBitRange.location, bufferBitRange.length);
 		
 		// calc step time range
 		// refactor: save globaly, increment location
 		Float64 currentStepStartTime = stepTimeDuration * currentStep;
 		
-		NSLog(@"step start time: %0.3f", currentStepStartTime);
+		printf("step start time: %0.3f\n", currentStepStartTime);
 		
 		// calc step bit range
 		// same refactor here
 		NSRange currentStepBitRange = [signalProcessor stepBitRangeWithStartTime:currentStepStartTime];
 		
-		NSLog(@"step bit range: (%u, %u)", currentStepBitRange.location, currentStepBitRange.length);
+		printf("step bit range: (%u, %u)\n", currentStepBitRange.location, currentStepBitRange.length);
 		
 		// if buffer range contains 2x step range
 		NSRange doubleCurrentStepBitRange = NSMakeRange(currentStepBitRange.location, currentStepBitRange.length * 2);
@@ -130,7 +129,7 @@ OSStatus RenderAudio(
 			
 			// report air signal bit
 			[signalProcessor.delegate airSignalProcessor:signalProcessor didReceiveBit:airSignalBit];
-			
+			 
 			// buffer pop step-1
 			int stepBitLengthMinusOne = currentStepBitRange.length-1;
 			bufferBitRange.location += stepBitLengthMinusOne;
@@ -138,12 +137,68 @@ OSStatus RenderAudio(
 			for (int i=0; i<bufferBitRange.length; i++) {
 				buffer[i] = buffer[i + stepBitLengthMinusOne];
 			}
-			
+			 
 			// inc current step
 			currentStep++;	
 		}
 	
 	}// end loop
+	
+	// -----------------------------------------------
+	// RENDER TONE
+	
+	// Tmp amplitude
+	double leftAmplitude = 60.0;
+	double rightAmplitude = 60.0;
+	
+	// Get the tone parameters out of the view controller
+	double left_theta = signalProcessor->left_theta;
+	double right_theta = signalProcessor->right_theta;
+	double left_theta_increment = 2.0 * M_PI * leftAmplitude / signalProcessor.sampleRate;
+	double right_theta_increment = 2.0 * M_PI * rightAmplitude / signalProcessor.sampleRate;
+	
+	// This is a stereo tone generator so we need the both buffers
+	const int channel_left = 0;
+	const int channel_right = 1;
+	Float32 *buffer_left = (Float32 *)ioData->mBuffers[channel_left].mData;
+	Float32 *buffer_right = (Float32 *)ioData->mBuffers[channel_right].mData;
+	
+	// Variables for generation cycle
+	float leftWaveValue;
+	float rightWaveValue;
+	float leftPhaseSign;
+	float rightPhaseSign;
+
+	// Generate the samples
+	for (UInt32 frame = 0; frame < inNumberFrames; frame++)
+	{
+				
+		// 2. wave value
+		leftWaveValue  = sin(left_theta);
+		rightWaveValue = sin(right_theta);
+		
+		// 3. phase sign
+		leftPhaseSign = 1.0;
+		rightPhaseSign = 1.0;
+		
+		// 4. signal
+		buffer_left[frame] = leftPhaseSign * leftWaveValue * leftAmplitude;
+		buffer_right[frame] = rightPhaseSign * rightWaveValue * rightAmplitude;
+		
+		// 5. theta step
+		left_theta += left_theta_increment;
+		right_theta += right_theta_increment;
+		
+		if (left_theta > 2.0 * M_PI)
+			left_theta -= 2.0 * M_PI;
+		
+		if (right_theta > 2.0 * M_PI)
+			right_theta -= 2.0 * M_PI;
+	}
+	
+	// Store the theta back in the view controller
+	signalProcessor->left_theta = left_theta;
+	signalProcessor->right_theta = right_theta;
 	
 	// Save context
 	signalProcessor->_buffer = buffer;

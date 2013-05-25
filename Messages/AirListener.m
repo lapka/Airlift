@@ -183,7 +183,7 @@
 	}
 	
 	BOOL GOTCHA = (errors_0<gotcha_threshold || errors_1<gotcha_threshold || errors_2<gotcha_threshold || errors_3<gotcha_threshold);
-	NSLog(@"message errors: %d, %d, %d, %d %@", errors_0, errors_1, errors_2, errors_3, GOTCHA?@"GOTCHA":@"");
+	printf("message errors: %d, %d, %d, %d %s\n", errors_0, errors_1, errors_2, errors_3, GOTCHA?"GOTCHA":"");
 	
 	return (isFirstBufferContain || isSecondBufferContain || isThirdBufferContain || isFourthBufferContain);
 }
