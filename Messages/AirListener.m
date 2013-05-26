@@ -6,36 +6,40 @@
 #import "AirListener.h"
 
 #define airMessageLength 56
-#define gotcha_threshold 30
+#define gotcha_threshold 2
 
 
 @implementation AirMessage
 
 + (AirMessage *)testMessage {
 	
-	UInt32 test_data[] = {0,0,0,1, 0,0,1,0,		// 0x12
-						  0,0,1,1, 0,1,0,0,		// 0x34
-						  0,1,0,1, 0,1,1,0,		// 0x56
-						  0,1,1,1, 1,0,0,0,		// 0x78
-						  1,0,0,1, 1,0,1,0,		// 0x9A
-						  1,0,1,1, 1,1,0,0,		// 0xBC
-						  1,1,0,1, 1,1,1,0};	// 0xDE
+	int test_data[airMessageLength] = {0,0,0,1, 0,0,1,0,	// 0x12
+									   0,0,1,1, 0,1,0,0,	// 0x34
+									   0,1,0,1, 0,1,1,0,	// 0x56
+									   0,1,1,1, 1,0,0,0,	// 0x78
+									   1,0,0,1, 1,0,1,0,	// 0x9A
+									   1,0,1,1, 1,1,0,0,	// 0xBC
+									   1,1,0,1, 1,1,1,0};	// 0xDE
 	
 	AirMessage *testMessage = [[AirMessage alloc] initWithData:test_data];
 	return testMessage;
 }
 
-- (id)initWithData:(UInt32 *)data {
+- (id)initWithData:(int *)data {
 	if ((self = [super init])) {
-		_data = data;
+		_data = (int *) malloc(airMessageLength * sizeof(int));
+		for (int i=0; i<airMessageLength; i++) {
+			_data[i] = data[i];
+		}
 	}
 	return self;
 }
 
 - (void)dealloc {
+	free(_data);
 }
 
-- (UInt32 *)data {
+- (int *)data {
 	return _data;
 }
 
@@ -109,7 +113,6 @@
 		_airSignalProcessor.delegate = self;
 		
 		_testMessage = [AirMessage testMessage];
-		
 	}
 	return self;
 }
@@ -171,7 +174,8 @@
 	int errors_2 = 0;
 	int errors_3 = 0;
 	
-	UInt32 *messageData = [message data];
+	int *messageData = [message data];
+	printf("buffer:  ");
 	
 	for (int i = 1; i < airMessageLength; i++) {
 		AirBit *bit = [buffer airBitAtIndex:i];
@@ -180,7 +184,14 @@
 		if ([bit bitWithShiftIndex:1] != messageData[i]) {isSecondBufferContain = NO; errors_1++;}
 		if ([bit bitWithShiftIndex:2] != messageData[i]) {isThirdBufferContain  = NO; errors_2++;}
 		if ([bit bitWithShiftIndex:3] != messageData[i]) {isFourthBufferContain = NO; errors_3++;}
+		printf("%d", (unsigned int)[bit bitWithShiftIndex:0]);
 	}
+	printf("\n");
+	printf("message: ");
+	for (int i = 1; i < airMessageLength; i++) {
+		printf("%d", messageData[i]);
+	}
+	printf("\n");
 	
 	BOOL GOTCHA = (errors_0<gotcha_threshold || errors_1<gotcha_threshold || errors_2<gotcha_threshold || errors_3<gotcha_threshold);
 	printf("message errors: %d, %d, %d, %d %s\n", errors_0, errors_1, errors_2, errors_3, GOTCHA?"GOTCHA":"");

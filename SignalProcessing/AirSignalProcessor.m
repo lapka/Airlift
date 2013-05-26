@@ -38,6 +38,20 @@ OSStatus RenderAudio(
 	// Get signal processor
 	AirSignalProcessor *signalProcessor = (__bridge AirSignalProcessor *)inRefCon;
 	
+	// Render Input
+	OSStatus err = AudioUnitRender(signalProcessor->audioUnit, ioActionFlags, inTimeStamp, 1, inNumberFrames, ioData);
+	if (err) { printf("RenderAudio: error %d\n", (int)err); return err; }
+	
+	// Get buffers
+	const int channel_left = 0;
+	const int channel_right = 1;
+	Float32 *buffer_left = (Float32 *)ioData->mBuffers[channel_left].mData;
+	Float32 *buffer_right = (Float32 *)ioData->mBuffers[channel_right].mData;
+	
+	
+	// -----------------------------------------------
+	// PROCESS SIGNAL
+	
 	// Get context
 	Float32 *buffer = signalProcessor->_buffer;
 	Float32 *stepData = signalProcessor->_stepData;
@@ -52,10 +66,6 @@ OSStatus RenderAudio(
 		Float64 sampleTime = inTimeStamp->mSampleTime / sampleRate;
 		zeroTimestamp = sampleTime;
 	}
-	
-	// Render Input
-	OSStatus err = AudioUnitRender(signalProcessor->audioUnit, ioActionFlags, inTimeStamp, 1, inNumberFrames, ioData);
-	if (err) { printf("RenderAudio: error %d\n", (int)err); return err; }
 	
 	// Get input data
 	Float32 *samples = (Float32*)(ioData->mBuffers[0].mData);
@@ -143,62 +153,12 @@ OSStatus RenderAudio(
 		}
 	
 	}// end loop
-	
-	// -----------------------------------------------
-	// RENDER TONE
-	
-	// Tmp amplitude
-	double leftAmplitude = 60.0;
-	double rightAmplitude = 60.0;
-	
-	// Get the tone parameters out of the view controller
-	double left_theta = signalProcessor->left_theta;
-	double right_theta = signalProcessor->right_theta;
-	double left_theta_increment = 2.0 * M_PI * leftAmplitude / signalProcessor.sampleRate;
-	double right_theta_increment = 2.0 * M_PI * rightAmplitude / signalProcessor.sampleRate;
-	
-	// This is a stereo tone generator so we need the both buffers
-	const int channel_left = 0;
-	const int channel_right = 1;
-	Float32 *buffer_left = (Float32 *)ioData->mBuffers[channel_left].mData;
-	Float32 *buffer_right = (Float32 *)ioData->mBuffers[channel_right].mData;
-	
-	// Variables for generation cycle
-	float leftWaveValue;
-	float rightWaveValue;
-	float leftPhaseSign;
-	float rightPhaseSign;
 
-	// Generate the samples
-	for (UInt32 frame = 0; frame < inNumberFrames; frame++)
-	{
-				
-		// 2. wave value
-		leftWaveValue  = sin(left_theta);
-		rightWaveValue = sin(right_theta);
-		
-		// 3. phase sign
-		leftPhaseSign = 1.0;
-		rightPhaseSign = 1.0;
-		
-		// 4. signal
-		buffer_left[frame] = leftPhaseSign * leftWaveValue * leftAmplitude;
-		buffer_right[frame] = rightPhaseSign * rightWaveValue * rightAmplitude;
-		
-		// 5. theta step
-		left_theta += left_theta_increment;
-		right_theta += right_theta_increment;
-		
-		if (left_theta > 2.0 * M_PI)
-			left_theta -= 2.0 * M_PI;
-		
-		if (right_theta > 2.0 * M_PI)
-			right_theta -= 2.0 * M_PI;
+	// Mute output
+	for (UInt32 frame = 0; frame < inNumberFrames; frame++) {
+		buffer_left[frame]  = 0.0;
+		buffer_right[frame] = 0.0;
 	}
-	
-	// Store the theta back in the view controller
-	signalProcessor->left_theta = left_theta;
-	signalProcessor->right_theta = right_theta;
 	
 	// Save context
 	signalProcessor->_buffer = buffer;
@@ -313,10 +273,6 @@ OSStatus RenderAudio(
 	
 	[self stopAudioUnit];
 }
-
-
-#pragma mark -
-#pragma mark AudioUnit
 
 
 #pragma mark -

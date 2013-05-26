@@ -39,10 +39,6 @@
 	UInt32 _stepBitLength;
 	UInt32 _stepDataBitLength; // optimized for fft
 	UInt32 _bufferBitLength;
-	
-	// generate
-	double left_theta;
-	double right_theta;
 }
 
 @property (nonatomic, weak) NSObject <AirSignalProcessorDelegate> *delegate;
@@ -50,6 +46,7 @@
 
 @property (nonatomic) Float32 sampleRate;
 @property (nonatomic) double stepFrequency;
+
 @property (nonatomic) BOOL isProcessing;
 
 - (void)startProcessing;
