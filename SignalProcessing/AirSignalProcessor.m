@@ -33,7 +33,15 @@ OSStatus RenderAudio(
 					 AudioBufferList 			*ioData)
 
 {
-	NSLog(@"\n\n----- Render ------");
+
+	// say hi main queue
+	
+//	NSLog(@"\n\n----- Render ------");
+//	printf("\n\n----- Render ------");
+	dispatch_sync(dispatch_get_main_queue(), ^{
+		int i=0;i++;
+	});
+	
 	
 	// Get signal processor
 	AirSignalProcessor *signalProcessor = (__bridge AirSignalProcessor *)inRefCon;
@@ -41,6 +49,8 @@ OSStatus RenderAudio(
 	// Render Input
 	OSStatus err = AudioUnitRender(signalProcessor->audioUnit, ioActionFlags, inTimeStamp, 1, inNumberFrames, ioData);
 	if (err) { printf("RenderAudio: error %d\n", (int)err); return err; }
+			
+	printf("r");
 	
 	// Get buffers
 	const int channel_left = 0;
@@ -82,20 +92,20 @@ OSStatus RenderAudio(
 	BOOL isBufferFullEnoughForStep = YES;
 	while (isBufferFullEnoughForStep) {
 	
-		printf("\n%d step\n", (unsigned int)currentStep);
-		printf("buffer bit range: (%u, %u)\n", bufferBitRange.location, bufferBitRange.length);
+//		printf("\n%d step\n", (unsigned int)currentStep);
+//		printf("buffer bit range: (%u, %u)\n", bufferBitRange.location, bufferBitRange.length);
 		
 		// calc step time range
 		// refactor: save globaly, increment location
 		Float64 currentStepStartTime = stepTimeDuration * currentStep;
 		
-		printf("step start time: %0.3f\n", currentStepStartTime);
+//		printf("step start time: %0.3f\n", currentStepStartTime);
 		
 		// calc step bit range
 		// same refactor here
 		NSRange currentStepBitRange = [signalProcessor stepBitRangeWithStartTime:currentStepStartTime];
 		
-		printf("step bit range: (%u, %u)\n", currentStepBitRange.location, currentStepBitRange.length);
+//		printf("step bit range: (%u, %u)\n", currentStepBitRange.location, currentStepBitRange.length);
 		
 		// if buffer range contains 2x step range
 		NSRange doubleCurrentStepBitRange = NSMakeRange(currentStepBitRange.location, currentStepBitRange.length * 2);
@@ -109,7 +119,7 @@ OSStatus RenderAudio(
 			// for all shift steps
 			for (int shiftStep = 0; shiftStep<defaultShiftSteps; shiftStep++) {
 				
-				printf("-- %u shift step, ", shiftStep);
+//				printf("-- %u shift step, ", shiftStep);
 				
 				// get step data bit range
 				Float64 shiftDuration = (stepTimeDuration / 4) * shiftStep;
@@ -134,7 +144,7 @@ OSStatus RenderAudio(
 				UInt32 shiftedBit = (oneFrequencyAmplitude > zeroFrequencyAmplitude) ? 1 : 0;
 				[airSignalBit setBit:shiftedBit forShiftIndex:shiftStep];
 				
-				printf("amp: (%f, %f), bit: %u\n", zeroFrequencyAmplitude, oneFrequencyAmplitude, (unsigned int)shiftedBit);
+//				printf("amp: (%f, %f), bit: %u\n", zeroFrequencyAmplitude, oneFrequencyAmplitude, (unsigned int)shiftedBit);
 			}
 			
 			// report air signal bit
@@ -225,6 +235,8 @@ OSStatus RenderAudio(
 		
 		[self createAudioUnit];
 		
+		// create data processing queue
+		data_processing_queue = dispatch_queue_create("com.mylapka.air_signal_data_processing_queue", NULL);
 		
 		// SETUP FFT
 		self.fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength];
@@ -378,6 +390,8 @@ OSStatus RenderAudio(
 	
 	OSErr err = AudioOutputUnitStop(audioUnit);
 	NSAssert1(err == noErr, @"Error stopping audio unit: %hd", err);
+	
+	NSLog(@"stopped AudioUnit");
 }
 
 

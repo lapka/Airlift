@@ -6,14 +6,14 @@
 #import "AirListener.h"
 
 #define airMessageLength 56
-#define gotcha_threshold 2
+#define gotcha_threshold 1
 
 
 @implementation AirMessage
 
 + (AirMessage *)testMessage {
 	
-	int test_data[airMessageLength] = {0,0,0,1, 0,0,1,0,	// 0x12
+	UInt32 test_data[airMessageLength] = {0,0,0,1, 0,0,1,0,	// 0x12
 									   0,0,1,1, 0,1,0,0,	// 0x34
 									   0,1,0,1, 0,1,1,0,	// 0x56
 									   0,1,1,1, 1,0,0,0,	// 0x78
@@ -25,9 +25,9 @@
 	return testMessage;
 }
 
-- (id)initWithData:(int *)data {
+- (id)initWithData:(UInt32 *)data {
 	if ((self = [super init])) {
-		_data = (int *) malloc(airMessageLength * sizeof(int));
+		_data = (UInt32 *) malloc(airMessageLength * sizeof(int));
 		for (int i=0; i<airMessageLength; i++) {
 			_data[i] = data[i];
 		}
@@ -39,7 +39,7 @@
 	free(_data);
 }
 
-- (int *)data {
+- (UInt32 *)data {
 	return _data;
 }
 
@@ -174,27 +174,30 @@
 	int errors_2 = 0;
 	int errors_3 = 0;
 	
-	int *messageData = [message data];
-	printf("buffer:  ");
+	UInt32 *messageData = [message data];
+//	printf("buffer:  ");
 	
 	for (int i = 1; i < airMessageLength; i++) {
-		AirBit *bit = [buffer airBitAtIndex:i];
+		@autoreleasepool {
+			AirBit *bit = [buffer airBitAtIndex:i];
+			
+			if ([bit bitWithShiftIndex:0] != messageData[i]) {isFirstBufferContain  = NO; errors_0++;}
+			if ([bit bitWithShiftIndex:1] != messageData[i]) {isSecondBufferContain = NO; errors_1++;}
+			if ([bit bitWithShiftIndex:2] != messageData[i]) {isThirdBufferContain  = NO; errors_2++;}
+			if ([bit bitWithShiftIndex:3] != messageData[i]) {isFourthBufferContain = NO; errors_3++;}
+		}
 		
-		if ([bit bitWithShiftIndex:0] != messageData[i]) {isFirstBufferContain  = NO; errors_0++;}
-		if ([bit bitWithShiftIndex:1] != messageData[i]) {isSecondBufferContain = NO; errors_1++;}
-		if ([bit bitWithShiftIndex:2] != messageData[i]) {isThirdBufferContain  = NO; errors_2++;}
-		if ([bit bitWithShiftIndex:3] != messageData[i]) {isFourthBufferContain = NO; errors_3++;}
-		printf("%d", (unsigned int)[bit bitWithShiftIndex:0]);
+//		printf("%d", (unsigned int)[bit bitWithShiftIndex:0]);
 	}
-	printf("\n");
-	printf("message: ");
-	for (int i = 1; i < airMessageLength; i++) {
-		printf("%d", messageData[i]);
-	}
-	printf("\n");
+//	printf("\n");
+//	printf("message: ");
+//	for (int i = 1; i < airMessageLength; i++) {
+//		printf("%d", messageData[i]);
+//	}
+//	printf("\n");
 	
-	BOOL GOTCHA = (errors_0<gotcha_threshold || errors_1<gotcha_threshold || errors_2<gotcha_threshold || errors_3<gotcha_threshold);
-	printf("message errors: %d, %d, %d, %d %s\n", errors_0, errors_1, errors_2, errors_3, GOTCHA?"GOTCHA":"");
+//	BOOL GOTCHA = (errors_0<gotcha_threshold || errors_1<gotcha_threshold || errors_2<gotcha_threshold || errors_3<gotcha_threshold);
+//	printf("message errors: %d, %d, %d, %d %s\n", errors_0, errors_1, errors_2, errors_3, GOTCHA?"GOTCHA":"");
 	
 	return (isFirstBufferContain || isSecondBufferContain || isThirdBufferContain || isFourthBufferContain);
 }

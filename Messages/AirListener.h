@@ -8,11 +8,11 @@
 
 
 @interface AirMessage : NSObject {
-	int *_data;
+	UInt32 *_data;
 }
 + (AirMessage *)testMessage;
-- (id)initWithData:(int *)data;
-- (int *)data;
+- (id)initWithData:(UInt32 *)data;
+- (UInt32 *)data;
 @end
 
 

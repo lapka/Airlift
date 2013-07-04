@@ -39,6 +39,8 @@
 	UInt32 _stepBitLength;
 	UInt32 _stepDataBitLength; // optimized for fft
 	UInt32 _bufferBitLength;
+	
+	dispatch_queue_t data_processing_queue;
 }
 
 @property (nonatomic, weak) NSObject <AirSignalProcessorDelegate> *delegate;
