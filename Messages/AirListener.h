@@ -12,6 +12,7 @@
 }
 + (AirMessage *)testMessage;
 - (id)initWithData:(UInt32 *)data;
+- (BOOL)checksum;
 - (UInt32 *)data;
 @end
 
@@ -21,9 +22,12 @@
 	UInt32 *_parallelBuffer_two;
 	UInt32 *_parallelBuffer_three;
 	UInt32 *_parallelBuffer_four;
+	// refactor: add buffers**
 }
 - (void)pushAirBit:(AirBit *)airBit;
 - (AirBit *)airBitAtIndex:(int)index;
+- (UInt32)bitAtIndex:(int)index parallelIndex:(int)parallelIndex;
+- (UInt32 *)parallelBufferAtIndex:(int)parallelIndex;
 @end
 
 
@@ -35,7 +39,7 @@
 
 
 @interface AirListener : NSObject <AirSignalProcessorDelegate> {
-	AirMessage *_testMessage;
+	UInt32 *_marker;
 }
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
@@ -45,5 +49,8 @@
 
 - (void)startListen;
 - (void)stopListen;
+
+- (UInt32 *)marker;
+- (void)setMarker:(UInt32 *)marker;
 
 @end
