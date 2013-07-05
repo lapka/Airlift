@@ -9,6 +9,9 @@
 #define checksumLength 8
 #define byteLength 8
 #define airMessageLength 48
+#define messageContentLength (airMessageLength - markerLength - checksumLength)
+#define alcoLength 16
+#define pressureLength 8
 #define parallelBuffersCount 4
 #define gotcha_threshold 1
 #define noMessageIndex -1
@@ -93,11 +96,6 @@
 	
 	UInt32 *crc_array = (UInt32 *) malloc(checksumLength * sizeof(UInt32));
 	uint2bit_array(crc, crc_array);
-
-	
-	// or use test crc array
-	
-	UInt32 test_crc_array[checksumLength] = {1,0,1,1, 1,1,0,0}; // 0xBC
 	
 	
 	// compare calculated crc with last message byte
@@ -105,8 +103,7 @@
 	BOOL isCrcEqual = YES;
 	int checksumStartIndex = airMessageLength-checksumLength;
 	for (int i = 0; i < checksumLength; i++) {
-		if (_data[checksumStartIndex + i] != test_crc_array[i]) isCrcEqual = NO;
-//		if (_data[checksumStartIndex + i] != crc_array[i]) isCrcEqual = NO;
+		if (_data[checksumStartIndex + i] != crc_array[i]) isCrcEqual = NO;
 	}
 	
 	free(crc_array);
@@ -146,7 +143,8 @@ void uint2bit_array(uint8_t input, UInt32 *output) {
 uint8_t bit_array2uint(UInt32 *array) {
 	uint8_t val = 0;
 	
-	val =   array[0] << 7 |
+	val =
+	array[0] << 7 |
 	array[1] << 6 |
 	array[2] << 5 |
 	array[3] << 4 |
@@ -154,6 +152,30 @@ uint8_t bit_array2uint(UInt32 *array) {
 	array[5] << 2 |
 	array[6] << 1 |
 	array[7];
+	
+	return val;
+}
+
+uint16_t bit_array2uint16(UInt32 *array) {
+	uint16_t val = 0;
+	
+	val =
+	array[0] << 15 |
+	array[1] << 14 |
+	array[2] << 13 |
+	array[3] << 12 |
+	array[4] << 11 |
+	array[5] << 10 |
+	array[6] << 9 |
+	array[7] << 8 |
+	array[8] << 7 |
+	array[9] << 6 |
+	array[10] << 5 |
+	array[11] << 4 |
+	array[12] << 3 |
+	array[13] << 2 |
+	array[14] << 1 |
+	array[15];
 	
 	return val;
 }
@@ -268,7 +290,7 @@ uint8_t bit_array2uint(UInt32 *array) {
 		_marker = (UInt32 *) malloc(markerLength * sizeof(UInt32));
 		
 		// default marker
-		UInt32 default_marker[markerLength] = {0,0,0,1, 0,0,1,0, 0,0,1,1, 0,1,0,0}; // 0x12 0x34
+		UInt32 default_marker[markerLength] = {1,1,0,1, 0,0,1,1, 1,0,0,1, 0,0,0,1}; // 0xD3 0x91
 		[self setMarker:default_marker];
 		
 		self.buffer = [AirBuffer new];
@@ -314,6 +336,36 @@ uint8_t bit_array2uint(UInt32 *array) {
 	
 	AirMessage *message = [self messageAtBuffer:_buffer withMarker:_marker];
 	if (message == nil) return;
+	
+	// temporary get alco and pressure here
+	
+	UInt32 *data = [message data];
+	UInt32 *pressure = (UInt32 *) malloc(pressureLength * sizeof(UInt32));
+	UInt32 *alco = (UInt32 *) malloc(alcoLength * sizeof(UInt32));
+	
+	for (int i = 0; i < pressureLength; i++) {
+		pressure[i] = data[markerLength + i];
+	}
+	
+	for (int i = 0; i < alcoLength; i++) {
+		alco[i] = data[markerLength + pressureLength + i];
+	}
+	
+	uint8_t pressure_v = bit_array2uint(pressure);
+	uint16_t alco_v = bit_array2uint16(alco);
+	
+	printf("[pressure: %d (", pressure_v);
+	for (int i = 0; i < pressureLength; i++) {
+		printf("%d", (unsigned int)pressure[i]);
+	}
+	printf("), alco: %d (", alco_v);
+	for (int i = 0; i < alcoLength; i++) {
+		printf("%d", (unsigned int)alco[i]);
+	}
+	printf(")]");
+	
+	free(alco);
+	free(pressure);
 	
 	printf(" M\n");
 	[self.delegate airListener:self didReceiveMessage:message];
