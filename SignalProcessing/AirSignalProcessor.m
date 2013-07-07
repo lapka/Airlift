@@ -5,6 +5,7 @@
 
 #import "AirSignalProcessor.h"
 #import <Accelerate/Accelerate.h>
+#include "bit_array.h"
 
 #define defaultSampleRate		44100.0
 #define defaultStepFrequency	187.5
