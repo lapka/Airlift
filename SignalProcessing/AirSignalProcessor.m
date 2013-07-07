@@ -5,7 +5,6 @@
 
 #import "AirSignalProcessor.h"
 #import <Accelerate/Accelerate.h>
-#include "bit_array.h"
 
 #define defaultSampleRate		44100.0
 #define defaultStepFrequency	187.5
@@ -186,21 +185,21 @@ OSStatus RenderAudio(
 
 - (id)init {
 	if ((self = [super init])) {
-		_shiftedBits = (UInt32 *) malloc(defaultShiftSteps * sizeof(UInt32));
+		_shiftedBits = bit_array_create(defaultShiftSteps);
 	}
 	return self;
 }
 
 - (void)dealloc {
-	free(_shiftedBits);
+	bit_array_free(_shiftedBits);
 }
 
 - (void)setBit:(UInt32)bit forShiftIndex:(UInt32)shiftIndex {
-	_shiftedBits[shiftIndex] = bit;
+	bit_array_assign(_shiftedBits, shiftIndex, bit);
 }
 
 - (UInt32)bitWithShiftIndex:(UInt32)shiftIndex {
-	return _shiftedBits[shiftIndex];
+	return bit_array_get(_shiftedBits, shiftIndex);
 }
 
 @end

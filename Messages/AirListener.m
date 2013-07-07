@@ -10,6 +10,8 @@
 #define byteLength 8
 #define airMessageLength 48
 #define messageContentLength (airMessageLength - markerLength - checksumLength)
+#define markerBytesCount (markerLength / byteLength)
+#define messageBytesCount (airMessageLength / byteLength)
 #define alcoLength 16
 #define pressureLength 8
 #define parallelBuffersCount 4
@@ -22,35 +24,26 @@
 
 @implementation AirMessage
 
-+ (AirMessage *)testMessage {
-	
-	UInt32 test_data[airMessageLength] = {0,0,0,1, 0,0,1,0,	// 0x12
-										  0,0,1,1, 0,1,0,0,	// 0x34
-										  0,1,0,1, 0,1,1,0,	// 0x56
-										  0,1,1,1, 1,0,0,0,	// 0x78
-										  1,0,0,1, 1,0,1,0,	// 0x9A
-										  1,0,1,1, 1,1,0,0};// 0xBC
-	
-	AirMessage *testMessage = [[AirMessage alloc] initWithData:test_data];
-	return testMessage;
-}
-
-- (id)initWithData:(UInt32 *)data {
+- (id)initWithData:(BIT_ARRAY *)data {
 	if ((self = [super init])) {
-		_data = (UInt32 *) malloc(airMessageLength * sizeof(UInt32));
-		for (int i=0; i<airMessageLength; i++) {
-			_data[i] = data[i];
-		}
+		_data = bit_array_create(airMessageLength);
+		bit_array_copy(_data, 0, data, 0, airMessageLength);
 	}
 	return self;
 }
 
 - (void)dealloc {
-	free(_data);
+	bit_array_free(_data);
 }
 
-- (UInt32 *)data {
+- (BIT_ARRAY *)data {
 	return _data;
+}
+
+- (uint8_t)byteAtIndex:(int)index {
+	
+	int startIndex = (index * byteLength) - 1;
+	return bit_array_get_word8(_data, startIndex);
 }
 
 #pragma mark checksum
@@ -59,56 +52,45 @@
 	
 	// get 3 message bytes
 	
-	int startIndex = markerLength;
-	int i;
-	
-	UInt32 *byte1_array = (UInt32 *) malloc(byteLength * sizeof(UInt32));
-	UInt32 *byte2_array = (UInt32 *) malloc(byteLength * sizeof(UInt32));
-	UInt32 *byte3_array = (UInt32 *) malloc(byteLength * sizeof(UInt32));
-	
-	for (i = 0; i < byteLength; i++) {
-		byte1_array[i] = _data[startIndex + i];
-		byte2_array[i] = _data[startIndex + byteLength + i];
-		byte3_array[i] = _data[startIndex + 2*byteLength + i];
-	}
-	
-	uint8_t byte1, byte2, byte3;
-	byte1 = bit_array2uint(byte1_array);
-	byte2 = bit_array2uint(byte2_array);
-	byte3 = bit_array2uint(byte3_array);
-	
-	free(byte1_array);
-	free(byte2_array);
-	free(byte3_array);
+	uint8_t byte1 = [self byteAtIndex:markerBytesCount + 0];
+	uint8_t byte2 = [self byteAtIndex:markerBytesCount + 1];
+	uint8_t byte3 = [self byteAtIndex:markerBytesCount + 2];
 	
 	printf("\n(bytes %X, %X, %X)", byte1, byte2, byte3);
 	
 	
-	// calc CRC
+	// calc crc
 	
 	uint8_t b[3] = {byte1, byte2, byte3};
-//	uint8_t b[3] = {0x0A, 0x0B, 0x0C};
 	uint8_t crc = [self crc8_withBuffer:b length:3];
 	printf("(crc %02X)", crc);
 	
 	
 	// convert crc to bit array
 	
-	UInt32 *crc_array = (UInt32 *) malloc(checksumLength * sizeof(UInt32));
-	uint2bit_array(crc, crc_array);
+	BIT_ARRAY *crc_array = bit_array_create(checksumLength);
+	bit_array_set_word8(crc_array, 0, crc);
+	
+	
+	// get last message byte
+	
+	uint8_t last_message_byte = [self byteAtIndex:messageBytesCount-1];
+	BIT_ARRAY *last_message_byte_array = bit_array_create(byteLength);
+	bit_array_set_word8(last_message_byte_array, 0, last_message_byte);
 	
 	
 	// compare calculated crc with last message byte
 	
-	BOOL isCrcEqual = YES;
-	int checksumStartIndex = airMessageLength-checksumLength;
-	for (int i = 0; i < checksumLength; i++) {
-		if (_data[checksumStartIndex + i] != crc_array[i]) isCrcEqual = NO;
-	}
+	int comparison = bit_array_cmp(crc_array, last_message_byte_array);
+	BOOL crcIsEqual = (comparison == 0);
 	
-	free(crc_array);
 	
-	return isCrcEqual;
+	// free guys
+	
+	bit_array_free(crc_array);
+	bit_array_free(last_message_byte_array);
+	
+	return crcIsEqual;
 }
 
 #pragma mark crc8
@@ -127,18 +109,6 @@
 }
 
 #pragma mark uint <-> bit array
-
-void uint2bit_array(uint8_t input, UInt32 *output) {
-	
-	output[0] = (input & 0x80) ? 1 : 0;
-	output[1] = (input & 0x40) ? 1 : 0;
-	output[2] = (input & 0x20) ? 1 : 0;
-	output[3] = (input & 0x10) ? 1 : 0;
-	output[4] = (input & 0x08) ? 1 : 0;
-	output[5] = (input & 0x04) ? 1 : 0;
-	output[6] = (input & 0x02) ? 1 : 0;
-	output[7] = (input & 0x01) ? 1 : 0;
-}
 
 uint8_t bit_array2uint(UInt32 *array) {
 	uint8_t val = 0;
@@ -190,81 +160,51 @@ uint16_t bit_array2uint16(UInt32 *array) {
 
 - (id)init {
 	if ((self = [super init])) {
-		_parallelBuffer_one   = (UInt32 *) malloc(airMessageLength * sizeof(UInt32));
-		_parallelBuffer_two   = (UInt32 *) malloc(airMessageLength * sizeof(UInt32));
-		_parallelBuffer_three = (UInt32 *) malloc(airMessageLength * sizeof(UInt32));
-		_parallelBuffer_four  = (UInt32 *) malloc(airMessageLength * sizeof(UInt32));
+		_parallelBuffer_one   = bit_array_create(airMessageLength);
+		_parallelBuffer_two   = bit_array_create(airMessageLength);
+		_parallelBuffer_three = bit_array_create(airMessageLength);
+		_parallelBuffer_four  = bit_array_create(airMessageLength);
 	}
 	return self;
 }
 
 - (void)dealloc {
-	free(_parallelBuffer_one);
-	free(_parallelBuffer_two);
-	free(_parallelBuffer_three);
-	free(_parallelBuffer_four);
+	bit_array_free(_parallelBuffer_one);
+	bit_array_free(_parallelBuffer_two);
+	bit_array_free(_parallelBuffer_three);
+	bit_array_free(_parallelBuffer_four);
 }
 
 - (void)pushAirBit:(AirBit *)airBit {
-	
-	[self pushBit:[airBit bitWithShiftIndex:0] toBuffer:_parallelBuffer_one];
-	[self pushBit:[airBit bitWithShiftIndex:1] toBuffer:_parallelBuffer_two];
-	[self pushBit:[airBit bitWithShiftIndex:2] toBuffer:_parallelBuffer_three];
-	[self pushBit:[airBit bitWithShiftIndex:3] toBuffer:_parallelBuffer_four];
+		
+	bit_array_shift_left(_parallelBuffer_one,   1, [airBit bitWithShiftIndex:0]);
+	bit_array_shift_left(_parallelBuffer_two,   1, [airBit bitWithShiftIndex:1]);
+	bit_array_shift_left(_parallelBuffer_three, 1, [airBit bitWithShiftIndex:2]);
+	bit_array_shift_left(_parallelBuffer_four,  1, [airBit bitWithShiftIndex:3]);
 }
 
 - (AirBit *)airBitAtIndex:(int)index {
 	
 	AirBit *airBit = [AirBit new];
-	[airBit setBit:_parallelBuffer_one[index]   forShiftIndex:0];
-	[airBit setBit:_parallelBuffer_two[index]   forShiftIndex:1];
-	[airBit setBit:_parallelBuffer_three[index] forShiftIndex:2];
-	[airBit setBit:_parallelBuffer_four[index]  forShiftIndex:3];
+	[airBit setBit:bit_array_get(_parallelBuffer_one, index) forShiftIndex:0];
+	[airBit setBit:bit_array_get(_parallelBuffer_two, index) forShiftIndex:1];
+	[airBit setBit:bit_array_get(_parallelBuffer_three, index) forShiftIndex:2];
+	[airBit setBit:bit_array_get(_parallelBuffer_four, index) forShiftIndex:3];
 	return airBit;
-}
-
-- (void)pushBit:(UInt32)bit toBuffer:(UInt32 *)buffer {
-	
-	// shift buffer
-	int bufferLengthMinusOne = airMessageLength - 1;
-	for (int i = 0; i < bufferLengthMinusOne; i++) {
-		buffer[i] = buffer[i+1];
-	}
-	
-	// add bit
-	buffer[bufferLengthMinusOne] = bit;
 }
 
 - (UInt32)bitAtIndex:(int)index parallelIndex:(int)parallelIndex {
 	
-	UInt32 bit;
-	
-	if (parallelIndex == 0)
-		bit = _parallelBuffer_one[index];
-	else if (parallelIndex == 1)
-		bit = _parallelBuffer_two[index];
-	else if (parallelIndex == 2)
-		bit = _parallelBuffer_three[index];
-	else if (parallelIndex == 3)
-		bit = _parallelBuffer_four[index];
-	else {
-		printf("Warning: bitAtIndex:parallelIndex: got wrong parallelIndex %d\n", parallelIndex);
-		bit = 0;
-	}
-	
-	return bit;
+	BIT_ARRAY *buffer = [self parallelBufferAtIndex:parallelIndex];
+	return bit_array_get(buffer, index);
 }
 
-- (UInt32 *)parallelBufferAtIndex:(int)parallelIndex {
+- (BIT_ARRAY *)parallelBufferAtIndex:(int)parallelIndex {
 	
-	if (parallelIndex == 0)
-		return _parallelBuffer_one;
-	else if (parallelIndex == 1)
-		return _parallelBuffer_two;
-	else if (parallelIndex == 2)
-		return _parallelBuffer_three;
-	else if (parallelIndex == 3)
-		return _parallelBuffer_four;
+	if (parallelIndex == 0)		 return _parallelBuffer_one;
+	else if (parallelIndex == 1) return _parallelBuffer_two;
+	else if (parallelIndex == 2) return _parallelBuffer_three;
+	else if (parallelIndex == 3) return _parallelBuffer_four;
 	else {
 		printf("Warning: parallelBufferAtIndex: got wrong parallelIndex %d\n", parallelIndex);
 		return nil;
@@ -287,10 +227,10 @@ uint16_t bit_array2uint16(UInt32 *array) {
 - (id)init {
 	if ((self = [super init])) {
 		
-		_marker = (UInt32 *) malloc(markerLength * sizeof(UInt32));
+		_marker = bit_array_create(markerLength);
 		
 		// default marker
-		UInt32 default_marker[markerLength] = {1,1,0,1, 0,0,1,1, 1,0,0,1, 0,0,0,1}; // 0xD3 0x91
+		uint16_t default_marker = 0xD391;
 		[self setMarker:default_marker];
 		
 		self.buffer = [AirBuffer new];
@@ -304,7 +244,7 @@ uint16_t bit_array2uint16(UInt32 *array) {
 - (void)dealloc {
 
 	self.airSignalProcessor = nil;
-	free(_marker);
+	bit_array_free(_marker);
 }
 
 
@@ -337,37 +277,18 @@ uint16_t bit_array2uint16(UInt32 *array) {
 	AirMessage *message = [self messageAtBuffer:_buffer withMarker:_marker];
 	if (message == nil) return;
 	
+	
 	// temporary get alco and pressure here
 	
-	UInt32 *data = [message data];
-	UInt32 *pressure = (UInt32 *) malloc(pressureLength * sizeof(UInt32));
-	UInt32 *alco = (UInt32 *) malloc(alcoLength * sizeof(UInt32));
+	BIT_ARRAY *data = [message data];
+	int pressureStartIndex = markerLength-1 + byteLength;
+	int alcoStartIndex = markerLength - 1 + 3 * byteLength;
 	
-	for (int i = 0; i < pressureLength; i++) {
-		pressure[i] = data[markerLength + i];
-	}
+	uint8_t pressure = bit_array_get_word8(data, pressureStartIndex);
+	uint16_t alco = bit_array_get_word16(data, alcoStartIndex);
 	
-	for (int i = 0; i < alcoLength; i++) {
-		alco[i] = data[markerLength + pressureLength + i];
-	}
+	printf("[pressure: %d, alco: %d] M\n", pressure, alco);
 	
-	uint8_t pressure_v = bit_array2uint(pressure);
-	uint16_t alco_v = bit_array2uint16(alco);
-	
-	printf("[pressure: %d (", pressure_v);
-	for (int i = 0; i < pressureLength; i++) {
-		printf("%d", (unsigned int)pressure[i]);
-	}
-	printf("), alco: %d (", alco_v);
-	for (int i = 0; i < alcoLength; i++) {
-		printf("%d", (unsigned int)alco[i]);
-	}
-	printf(")]");
-	
-	free(alco);
-	free(pressure);
-	
-	printf(" M\n");
 	[self.delegate airListener:self didReceiveMessage:message];
 }
 
@@ -375,12 +296,12 @@ uint16_t bit_array2uint16(UInt32 *array) {
 #pragma mark Message recognition
 
 
-- (AirMessage *)messageAtBuffer:(AirBuffer *)buffer withMarker:(UInt32 *)marker {
+- (AirMessage *)messageAtBuffer:(AirBuffer *)buffer withMarker:(BIT_ARRAY *)marker {
 	
 	int indexOfParallelBufferWithMessage = [self parallelBufferIndexAtBuffer:buffer withMarker:marker];
 	if (indexOfParallelBufferWithMessage == noMessageIndex) return nil;
 	
-	UInt32 *parallelBufferWithMessage = [buffer parallelBufferAtIndex:indexOfParallelBufferWithMessage];
+	BIT_ARRAY *parallelBufferWithMessage = [buffer parallelBufferAtIndex:indexOfParallelBufferWithMessage];
 	AirMessage *message = [[AirMessage alloc] initWithData:parallelBufferWithMessage];
 	
 	if ([message checksum]) return message;
@@ -393,25 +314,20 @@ uint16_t bit_array2uint16(UInt32 *array) {
 /*
  *	Return parallel buffer index if that buffer begins with marker
  *	Otherwise return -1
+ *
+ *	Assumed marker is 16 bits long
  */
-- (int)parallelBufferIndexAtBuffer:(AirBuffer *)buffer withMarker:(UInt32 *)marker {
+- (int)parallelBufferIndexAtBuffer:(AirBuffer *)buffer withMarker:(BIT_ARRAY *)marker {
 	
-	UInt32 parallelBufferBeginFlag[parallelBuffersCount] = {1, 1, 1, 1};
-	BOOL lastBit = NO;
-	int bitIndex;
-	int parallelIndex;
+	int startIndex = markerLength-1;
+	uint16_t marker_word = bit_array_get_word16(marker, startIndex);
 	
-	for (bitIndex = 0; bitIndex < markerLength; bitIndex++) {
-		lastBit = (bitIndex + 1 == markerLength);
-		for (parallelIndex = 0; parallelIndex < parallelBuffersCount; parallelIndex++) {
-			if ([buffer bitAtIndex:bitIndex parallelIndex:parallelIndex] != marker[bitIndex]) {
-				parallelBufferBeginFlag[parallelIndex] = 0;
-			}
-			if (lastBit && parallelBufferBeginFlag[parallelIndex] == 1) {
-				return parallelIndex;
-			}
-		}
+	for (int parallelIndex = 0; parallelIndex < parallelBuffersCount; parallelIndex++) {
+		BIT_ARRAY *parallelBuffer = [buffer parallelBufferAtIndex:parallelIndex];
+		uint16_t first_two_bytes_word = bit_array_get_word16(parallelBuffer, startIndex);
+		if (first_two_bytes_word == marker_word) return parallelIndex;
 	}
+	
 	return noMessageIndex;
 }
 
@@ -419,17 +335,14 @@ uint16_t bit_array2uint16(UInt32 *array) {
 #pragma mark Marker
 
 
-- (UInt32 *)marker {
-	return _marker;
+- (uint16_t)marker {
+	return bit_array_get_word16(_marker, markerLength-1);
 }
 
 
-- (void)setMarker:(UInt32 *)marker {
+- (void)setMarker:(uint16_t)marker {
 	
-	if (!marker) return;
-	for (int i=0; i<markerLength; i++) {
-		_marker[i] = marker[i];
-	}
+	bit_array_set_word16(_marker, markerLength-1, marker);
 }
 
 

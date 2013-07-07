@@ -5,29 +5,29 @@
 
 #import <Foundation/Foundation.h>
 #import "AirSignalProcessor.h"
+#include "bit_array.h"
 
 
 @interface AirMessage : NSObject {
-	UInt32 *_data;
+	BIT_ARRAY *_data;
 }
-+ (AirMessage *)testMessage;
-- (id)initWithData:(UInt32 *)data;
+- (id)initWithData:(BIT_ARRAY *)data;
 - (BOOL)checksum;
-- (UInt32 *)data;
+- (BIT_ARRAY *)data;
+- (uint8_t)byteAtIndex:(int)index;
 @end
 
 
 @interface AirBuffer : NSObject {
-	UInt32 *_parallelBuffer_one;
-	UInt32 *_parallelBuffer_two;
-	UInt32 *_parallelBuffer_three;
-	UInt32 *_parallelBuffer_four;
-	// refactor: add buffers**
+	BIT_ARRAY *_parallelBuffer_one;
+	BIT_ARRAY *_parallelBuffer_two;
+	BIT_ARRAY *_parallelBuffer_three;
+	BIT_ARRAY *_parallelBuffer_four;
 }
 - (void)pushAirBit:(AirBit *)airBit;
 - (AirBit *)airBitAtIndex:(int)index;
 - (UInt32)bitAtIndex:(int)index parallelIndex:(int)parallelIndex;
-- (UInt32 *)parallelBufferAtIndex:(int)parallelIndex;
+- (BIT_ARRAY *)parallelBufferAtIndex:(int)parallelIndex;
 @end
 
 
@@ -39,7 +39,7 @@
 
 
 @interface AirListener : NSObject <AirSignalProcessorDelegate> {
-	UInt32 *_marker;
+	BIT_ARRAY *_marker;
 }
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
@@ -50,7 +50,7 @@
 - (void)startListen;
 - (void)stopListen;
 
-- (UInt32 *)marker;
-- (void)setMarker:(UInt32 *)marker;
+- (uint16_t)marker;
+- (void)setMarker:(uint16_t)marker;
 
 @end

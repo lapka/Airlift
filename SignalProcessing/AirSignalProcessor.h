@@ -7,10 +7,11 @@
 #import <AudioUnit/AudioUnit.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import "AirSignalFFTAnalyzer.h"
+#include "bit_array.h"
 
 
 @interface AirBit : NSObject {
-	UInt32 *_shiftedBits;
+	BIT_ARRAY *_shiftedBits;
 }
 - (void)setBit:(UInt32)bit forShiftIndex:(UInt32)shiftIndex;
 - (UInt32)bitWithShiftIndex:(UInt32)shiftIndex;
