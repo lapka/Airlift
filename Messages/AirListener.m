@@ -108,48 +108,6 @@
 	return crc;
 }
 
-#pragma mark uint <-> bit array
-
-uint8_t bit_array2uint(UInt32 *array) {
-	uint8_t val = 0;
-	
-	val =
-	array[0] << 7 |
-	array[1] << 6 |
-	array[2] << 5 |
-	array[3] << 4 |
-	array[4] << 3 |
-	array[5] << 2 |
-	array[6] << 1 |
-	array[7];
-	
-	return val;
-}
-
-uint16_t bit_array2uint16(UInt32 *array) {
-	uint16_t val = 0;
-	
-	val =
-	array[0] << 15 |
-	array[1] << 14 |
-	array[2] << 13 |
-	array[3] << 12 |
-	array[4] << 11 |
-	array[5] << 10 |
-	array[6] << 9 |
-	array[7] << 8 |
-	array[8] << 7 |
-	array[9] << 6 |
-	array[10] << 5 |
-	array[11] << 4 |
-	array[12] << 3 |
-	array[13] << 2 |
-	array[14] << 1 |
-	array[15];
-	
-	return val;
-}
-
 @end
 
 
