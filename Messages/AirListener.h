@@ -38,19 +38,15 @@
 @end
 
 
-@interface AirListener : NSObject <AirSignalProcessorDelegate> {
-	BIT_ARRAY *_marker;
-}
+@interface AirListener : NSObject <AirSignalProcessorDelegate>
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
 @property (nonatomic, weak) NSObject <AirListenerDelegate> *delegate;
 @property (nonatomic, strong) AirBuffer *buffer;
 @property BOOL isListening;
+@property uint16_t marker;
 
 - (void)startListen;
 - (void)stopListen;
-
-- (uint16_t)marker;
-- (void)setMarker:(uint16_t)marker;
 
 @end

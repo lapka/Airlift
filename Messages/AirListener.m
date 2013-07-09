@@ -4,6 +4,7 @@
 //
 
 #import "AirListener.h"
+#import "bit_array_extra.h"
 
 #define markerLength 16
 #define checksumLength 8
@@ -42,7 +43,7 @@
 
 - (uint8_t)byteAtIndex:(int)index {
 	
-	int startIndex = (index * byteLength) - 1;
+	int startIndex = index * byteLength;
 	return bit_array_get_word8(_data, startIndex);
 }
 
@@ -56,7 +57,7 @@
 	uint8_t byte2 = [self byteAtIndex:markerBytesCount + 1];
 	uint8_t byte3 = [self byteAtIndex:markerBytesCount + 2];
 	
-	printf("\n(bytes %X, %X, %X)", byte1, byte2, byte3);
+	printf("(bytes %02X, %02X, %02X)", byte1, byte2, byte3);
 	
 	
 	// calc crc
@@ -72,6 +73,12 @@
 	bit_array_set_word8(crc_array, 0, crc);
 	
 	
+	
+	// reversed crc
+	uint8_t crcr = bit_array_get_reversed_word8(crc_array, 0);
+	printf("(crcr %02X)", crcr);
+	
+	
 	// get last message byte
 	
 	uint8_t last_message_byte = [self byteAtIndex:messageBytesCount-1];
@@ -79,10 +86,17 @@
 	bit_array_set_word8(last_message_byte_array, 0, last_message_byte);
 	
 	
+
 	// compare calculated crc with last message byte
 	
-	int comparison = bit_array_cmp(crc_array, last_message_byte_array);
-	BOOL crcIsEqual = (comparison == 0);
+//	uint8_t last_message_byte = [self byteAtIndex:messageBytesCount-1];
+	BOOL crcIsEqual = (crc == last_message_byte);
+	printf("(last %02X)", last_message_byte);
+	
+	
+	// reversed last byte
+	uint8_t last_message_byte_r = bit_array_get_reversed_word8(last_message_byte_array, 0);
+	printf("(lastr %02X)", last_message_byte_r);
 	
 	
 	// free guys
@@ -185,11 +199,8 @@
 - (id)init {
 	if ((self = [super init])) {
 		
-		_marker = bit_array_create(markerLength);
-		
 		// default marker
-		uint16_t default_marker = 0xD391;
-		[self setMarker:default_marker];
+		_marker = 0xD391;
 		
 		self.buffer = [AirBuffer new];
 		self.airSignalProcessor = [AirSignalProcessor new];
@@ -202,7 +213,6 @@
 - (void)dealloc {
 
 	self.airSignalProcessor = nil;
-	bit_array_free(_marker);
 }
 
 
@@ -239,11 +249,11 @@
 	// temporary get alco and pressure here
 	
 	BIT_ARRAY *data = [message data];
-	int pressureStartIndex = markerLength-1 + byteLength;
-	int alcoStartIndex = markerLength - 1 + 3 * byteLength;
+	int pressureStartIndex = markerLength;
+	int alcoStartIndex = markerLength + byteLength;
 	
-	uint8_t pressure = bit_array_get_word8(data, pressureStartIndex);
-	uint16_t alco = bit_array_get_word16(data, alcoStartIndex);
+	uint8_t pressure = bit_array_get_reversed_word8(data, pressureStartIndex);
+	uint16_t alco = bit_array_get_reversed_word16(data, alcoStartIndex);
 	
 	printf("[pressure: %d, alco: %d] M\n", pressure, alco);
 	
@@ -254,13 +264,25 @@
 #pragma mark Message recognition
 
 
-- (AirMessage *)messageAtBuffer:(AirBuffer *)buffer withMarker:(BIT_ARRAY *)marker {
+- (AirMessage *)messageAtBuffer:(AirBuffer *)buffer withMarker:(uint16_t)marker {
 	
 	int indexOfParallelBufferWithMessage = [self parallelBufferIndexAtBuffer:buffer withMarker:marker];
 	if (indexOfParallelBufferWithMessage == noMessageIndex) return nil;
 	
 	BIT_ARRAY *parallelBufferWithMessage = [buffer parallelBufferAtIndex:indexOfParallelBufferWithMessage];
 	AirMessage *message = [[AirMessage alloc] initWithData:parallelBufferWithMessage];
+	
+	BIT_ARRAY *data = [message data];
+	
+	printf("\n");
+	for (int i=0; i<airMessageLength; i++) {
+		char c = bit_array_get(data, i);
+		printf("%d", c);
+	}
+	printf("\n");
+	
+	uint16_t marker_word = bit_array_get_word16(data, 0);
+	printf("\n(marker %04X)", marker_word);
 	
 	if ([message checksum]) return message;
 	
@@ -275,32 +297,17 @@
  *
  *	Assumed marker is 16 bits long
  */
-- (int)parallelBufferIndexAtBuffer:(AirBuffer *)buffer withMarker:(BIT_ARRAY *)marker {
+- (int)parallelBufferIndexAtBuffer:(AirBuffer *)buffer withMarker:(uint16_t)marker {
 	
-	int startIndex = markerLength-1;
-	uint16_t marker_word = bit_array_get_word16(marker, startIndex);
+	int startIndex = 0;
 	
 	for (int parallelIndex = 0; parallelIndex < parallelBuffersCount; parallelIndex++) {
 		BIT_ARRAY *parallelBuffer = [buffer parallelBufferAtIndex:parallelIndex];
 		uint16_t first_two_bytes_word = bit_array_get_word16(parallelBuffer, startIndex);
-		if (first_two_bytes_word == marker_word) return parallelIndex;
+		if (first_two_bytes_word == marker) return parallelIndex;
 	}
 	
 	return noMessageIndex;
-}
-
-
-#pragma mark Marker
-
-
-- (uint16_t)marker {
-	return bit_array_get_word16(_marker, markerLength-1);
-}
-
-
-- (void)setMarker:(uint16_t)marker {
-	
-	bit_array_set_word16(_marker, markerLength-1, marker);
 }
 
 
