@@ -4,26 +4,30 @@
 //
 
 #import "AirListener.h"
-#import "bit_array_extra.h"
 
+#define airMessageLength 48
 #define markerLength 16
+#define pressureLength 8
+#define alcoLength 16
 #define checksumLength 8
 #define byteLength 8
-#define airMessageLength 48
+
 #define messageContentLength (airMessageLength - markerLength - checksumLength)
 #define markerBytesCount (markerLength / byteLength)
 #define messageBytesCount (airMessageLength / byteLength)
-#define alcoLength 16
-#define pressureLength 8
+
 #define parallelBuffersCount 4
 #define gotcha_threshold 1
 #define noMessageIndex -1
+
+
 
 
 #pragma mark -
 
 
 @implementation AirMessage
+
 
 - (id)initWithData:(BIT_ARRAY *)data {
 	if ((self = [super init])) {
@@ -33,83 +37,47 @@
 	return self;
 }
 
+
 - (void)dealloc {
 	bit_array_free(_data);
 }
+
 
 - (BIT_ARRAY *)data {
 	return _data;
 }
 
+
 - (uint8_t)byteAtIndex:(int)index {
 	
-	int startIndex = index * byteLength;
+	int startIndex = airMessageLength - (index + 1) * byteLength;
 	return bit_array_get_word8(_data, startIndex);
 }
 
-#pragma mark checksum
 
 - (BOOL)checksum {
 	
 	// get 3 message bytes
-	
 	uint8_t byte1 = [self byteAtIndex:markerBytesCount + 0];
 	uint8_t byte2 = [self byteAtIndex:markerBytesCount + 1];
 	uint8_t byte3 = [self byteAtIndex:markerBytesCount + 2];
-	
 	printf("(bytes %02X, %02X, %02X)", byte1, byte2, byte3);
 	
-	
 	// calc crc
-	
 	uint8_t b[3] = {byte1, byte2, byte3};
 	uint8_t crc = [self crc8_withBuffer:b length:3];
 	printf("(crc %02X)", crc);
 	
-	
-	// convert crc to bit array
-	
-	BIT_ARRAY *crc_array = bit_array_create(checksumLength);
-	bit_array_set_word8(crc_array, 0, crc);
-	
-	
-	
-	// reversed crc
-	uint8_t crcr = bit_array_get_reversed_word8(crc_array, 0);
-	printf("(crcr %02X)", crcr);
-	
-	
-	// get last message byte
-	
-	uint8_t last_message_byte = [self byteAtIndex:messageBytesCount-1];
-	BIT_ARRAY *last_message_byte_array = bit_array_create(byteLength);
-	bit_array_set_word8(last_message_byte_array, 0, last_message_byte);
-	
-	
-
 	// compare calculated crc with last message byte
-	
-//	uint8_t last_message_byte = [self byteAtIndex:messageBytesCount-1];
+	uint8_t last_message_byte = [self byteAtIndex:messageBytesCount-1];
 	BOOL crcIsEqual = (crc == last_message_byte);
-	printf("(last %02X)", last_message_byte);
-	
-	
-	// reversed last byte
-	uint8_t last_message_byte_r = bit_array_get_reversed_word8(last_message_byte_array, 0);
-	printf("(lastr %02X)", last_message_byte_r);
-	
-	
-	// free guys
-	
-	bit_array_free(crc_array);
-	bit_array_free(last_message_byte_array);
-	
+
 	return crcIsEqual;
 }
 
-#pragma mark crc8
 
 - (uint8_t)crc8_withBuffer:(uint8_t *)buffer length:(uint8_t)length {
+	
 	uint8_t i;
 	uint8_t crc = 0x00;
 	
@@ -125,10 +93,13 @@
 @end
 
 
+
+
 #pragma mark -
 
 
 @implementation AirBuffer
+
 
 - (id)init {
 	if ((self = [super init])) {
@@ -140,6 +111,7 @@
 	return self;
 }
 
+
 - (void)dealloc {
 	bit_array_free(_parallelBuffer_one);
 	bit_array_free(_parallelBuffer_two);
@@ -147,29 +119,22 @@
 	bit_array_free(_parallelBuffer_four);
 }
 
+
 - (void)pushAirBit:(AirBit *)airBit {
-		
+	
 	bit_array_shift_left(_parallelBuffer_one,   1, [airBit bitWithShiftIndex:0]);
 	bit_array_shift_left(_parallelBuffer_two,   1, [airBit bitWithShiftIndex:1]);
 	bit_array_shift_left(_parallelBuffer_three, 1, [airBit bitWithShiftIndex:2]);
 	bit_array_shift_left(_parallelBuffer_four,  1, [airBit bitWithShiftIndex:3]);
 }
 
-- (AirBit *)airBitAtIndex:(int)index {
-	
-	AirBit *airBit = [AirBit new];
-	[airBit setBit:bit_array_get(_parallelBuffer_one, index) forShiftIndex:0];
-	[airBit setBit:bit_array_get(_parallelBuffer_two, index) forShiftIndex:1];
-	[airBit setBit:bit_array_get(_parallelBuffer_three, index) forShiftIndex:2];
-	[airBit setBit:bit_array_get(_parallelBuffer_four, index) forShiftIndex:3];
-	return airBit;
-}
 
 - (UInt32)bitAtIndex:(int)index parallelIndex:(int)parallelIndex {
 	
 	BIT_ARRAY *buffer = [self parallelBufferAtIndex:parallelIndex];
 	return bit_array_get(buffer, index);
 }
+
 
 - (BIT_ARRAY *)parallelBufferAtIndex:(int)parallelIndex {
 	
@@ -183,14 +148,13 @@
 	}
 }
 
+
 @end
+
+
 
 
 #pragma mark -
-
-
-@interface AirListener (private)
-@end
 
 
 @implementation AirListener
@@ -249,13 +213,13 @@
 	// temporary get alco and pressure here
 	
 	BIT_ARRAY *data = [message data];
-	int pressureStartIndex = markerLength;
-	int alcoStartIndex = markerLength + byteLength;
+	int pressureStartIndex = airMessageLength - markerLength - byteLength;
+	int alcoStartIndex = airMessageLength - markerLength - 3 * byteLength;
 	
-	uint8_t pressure = bit_array_get_reversed_word8(data, pressureStartIndex);
-	uint16_t alco = bit_array_get_reversed_word16(data, alcoStartIndex);
+	uint8_t pressure = bit_array_get_word8(data, pressureStartIndex);
+	uint16_t alco = bit_array_get_word16(data, alcoStartIndex);
 	
-	printf("[pressure: %d, alco: %d] M\n", pressure, alco);
+	printf("[pressure: %d, alco: %d]\n", pressure, alco);
 	
 	[self.delegate airListener:self didReceiveMessage:message];
 }
@@ -274,14 +238,7 @@
 	
 	BIT_ARRAY *data = [message data];
 	
-	printf("\n");
-	for (int i=0; i<airMessageLength; i++) {
-		char c = bit_array_get(data, i);
-		printf("%d", c);
-	}
-	printf("\n");
-	
-	uint16_t marker_word = bit_array_get_word16(data, 0);
+	uint16_t marker_word = bit_array_get_word16(data, airMessageLength - markerLength);
 	printf("\n(marker %04X)", marker_word);
 	
 	if ([message checksum]) return message;
@@ -299,7 +256,7 @@
  */
 - (int)parallelBufferIndexAtBuffer:(AirBuffer *)buffer withMarker:(uint16_t)marker {
 	
-	int startIndex = 0;
+	int startIndex = airMessageLength - markerLength;
 	
 	for (int parallelIndex = 0; parallelIndex < parallelBuffersCount; parallelIndex++) {
 		BIT_ARRAY *parallelBuffer = [buffer parallelBufferAtIndex:parallelIndex];

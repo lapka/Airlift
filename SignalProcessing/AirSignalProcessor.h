@@ -13,8 +13,8 @@
 @interface AirBit : NSObject {
 	BIT_ARRAY *_shiftedBits;
 }
-- (void)setBit:(UInt32)bit forShiftIndex:(UInt32)shiftIndex;
-- (UInt32)bitWithShiftIndex:(UInt32)shiftIndex;
+- (void)setBit:(char)bit forShiftIndex:(int)shiftIndex;
+- (char)bitWithShiftIndex:(int)shiftIndex;
 @end
 
 

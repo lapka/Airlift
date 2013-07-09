@@ -25,7 +25,6 @@
 	BIT_ARRAY *_parallelBuffer_four;
 }
 - (void)pushAirBit:(AirBit *)airBit;
-- (AirBit *)airBitAtIndex:(int)index;
 - (UInt32)bitAtIndex:(int)index parallelIndex:(int)parallelIndex;
 - (BIT_ARRAY *)parallelBufferAtIndex:(int)parallelIndex;
 @end

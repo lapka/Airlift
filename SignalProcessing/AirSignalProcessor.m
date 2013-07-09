@@ -141,7 +141,7 @@ OSStatus RenderAudio(
 				Float32 oneFrequencyAmplitude = [signalProcessor.fftAnalyzer processFFTWithData:stepData];
 				
 				// calc & save shifted bit
-				UInt32 shiftedBit = (oneFrequencyAmplitude > zeroFrequencyAmplitude) ? 1 : 0;
+				char shiftedBit = (oneFrequencyAmplitude > zeroFrequencyAmplitude) ? 1 : 0;
 				[airSignalBit setBit:shiftedBit forShiftIndex:shiftStep];
 				
 //				printf("amp: (%f, %f), bit: %u\n", zeroFrequencyAmplitude, oneFrequencyAmplitude, (unsigned int)shiftedBit);
@@ -194,11 +194,11 @@ OSStatus RenderAudio(
 	bit_array_free(_shiftedBits);
 }
 
-- (void)setBit:(UInt32)bit forShiftIndex:(UInt32)shiftIndex {
+- (void)setBit:(char)bit forShiftIndex:(int)shiftIndex {
 	bit_array_assign(_shiftedBits, shiftIndex, bit);
 }
 
-- (UInt32)bitWithShiftIndex:(UInt32)shiftIndex {
+- (char)bitWithShiftIndex:(int)shiftIndex {
 	return bit_array_get(_shiftedBits, shiftIndex);
 }
 
