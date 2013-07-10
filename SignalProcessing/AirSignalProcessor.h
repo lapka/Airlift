@@ -41,19 +41,23 @@
 	UInt32 _stepDataBitLength; // optimized for fft
 	UInt32 _bufferBitLength;
 	
-	dispatch_queue_t data_processing_queue;
+	AirBit *_signalBit;
+	
+	dispatch_queue_t _data_processing_queue;
 }
 
 @property (nonatomic, weak) NSObject <AirSignalProcessorDelegate> *delegate;
 @property (nonatomic, strong) AirSignalFFTAnalyzer *fftAnalyzer;
-
 @property (nonatomic) Float32 sampleRate;
 @property (nonatomic) double stepFrequency;
-
 @property (nonatomic) BOOL isProcessing;
 
+- (void)createAudioUnit;
+- (void)removeAudioUnit;
 - (void)startProcessing;
 - (void)stopProcessing;
+- (void)setupFFTAnalyzer;
+- (void)unsetupFFTAnalyzer;
 
 // Utilities
 - (NSRange)stepBitRangeWithStartTime:(Float64)startTime;

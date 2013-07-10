@@ -33,16 +33,6 @@ OSStatus RenderAudio(
 					 AudioBufferList 			*ioData)
 
 {
-
-	// say hi main queue
-	
-//	NSLog(@"\n\n----- Render ------");
-//	printf("\n\n----- Render ------");
-	dispatch_sync(dispatch_get_main_queue(), ^{
-		int i=0;i++;
-	});
-	
-	
 	// Get signal processor
 	AirSignalProcessor *signalProcessor = (__bridge AirSignalProcessor *)inRefCon;
 	
@@ -50,15 +40,13 @@ OSStatus RenderAudio(
 	OSStatus err = AudioUnitRender(signalProcessor->audioUnit, ioActionFlags, inTimeStamp, 1, inNumberFrames, ioData);
 	if (err) { printf("RenderAudio: error %d\n", (int)err); return err; }
 			
-	printf("r");
-	
+	printf("r");	
+	 
 	// Get buffers
-	const int channel_left = 0;
-	const int channel_right = 1;
-	Float32 *buffer_left = (Float32 *)ioData->mBuffers[channel_left].mData;
-	Float32 *buffer_right = (Float32 *)ioData->mBuffers[channel_right].mData;
-	
-	
+	Float32 *buffer_left = (Float32 *)(ioData->mBuffers[0].mData);
+	Float32 *buffer_right = (Float32 *)(ioData->mBuffers[1].mData);
+
+	 
 	// -----------------------------------------------
 	// PROCESS SIGNAL
 	
@@ -70,6 +58,9 @@ OSStatus RenderAudio(
 	Float64 zeroTimestamp = signalProcessor->_zeroTimestamp;
 	NSRange bufferBitRange = signalProcessor->_bufferBitRange;
 	Float64 stepTimeDuration = signalProcessor->_stepTimeDuration;
+	UInt32 stepBitLength = signalProcessor->_stepBitLength;
+	UInt32 stepDataBitLength = signalProcessor->_stepDataBitLength;
+	AirBit *signalBit = signalProcessor->_signalBit;
 	
 	// Set timestamp
 	if (zeroTimestamp == 0) {
@@ -77,59 +68,44 @@ OSStatus RenderAudio(
 		zeroTimestamp = sampleTime;
 	}
 	
-	// Get input data
-	Float32 *samples = (Float32*)(ioData->mBuffers[0].mData);
-	
 	// Add input data to buffer
 	for (UInt32 i=0; i<inNumberFrames; i++) {
-		buffer[bufferBitRange.length+i] = samples[i];
+		buffer[bufferBitRange.length+i] = buffer_left[i];
 	}
-	
+	 
 	// Update buffer range
 	bufferBitRange.length += inNumberFrames;
-	
+	 
 	// start loop
 	BOOL isBufferFullEnoughForStep = YES;
 	while (isBufferFullEnoughForStep) {
-	
-//		printf("\n%d step\n", (unsigned int)currentStep);
-//		printf("buffer bit range: (%u, %u)\n", bufferBitRange.location, bufferBitRange.length);
 		
 		// calc step time range
-		// refactor: save globaly, increment location
 		Float64 currentStepStartTime = stepTimeDuration * currentStep;
 		
-//		printf("step start time: %0.3f\n", currentStepStartTime);
-		
 		// calc step bit range
-		// same refactor here
-		NSRange currentStepBitRange = [signalProcessor stepBitRangeWithStartTime:currentStepStartTime];
-		
-//		printf("step bit range: (%u, %u)\n", currentStepBitRange.location, currentStepBitRange.length);
+		Float64 oneBitTimeLength = 1.0 / defaultSampleRate;
+		NSRange currentStepBitRange = NSMakeRange(floor(currentStepStartTime / oneBitTimeLength), stepBitLength);
 		
 		// if buffer range contains 2x step range
 		NSRange doubleCurrentStepBitRange = NSMakeRange(currentStepBitRange.location, currentStepBitRange.length * 2);
 		BOOL bufferBitRangeContainsDoubleStepBitRange = NSEqualRanges(NSIntersectionRange(bufferBitRange, doubleCurrentStepBitRange), doubleCurrentStepBitRange);
 		isBufferFullEnoughForStep = bufferBitRangeContainsDoubleStepBitRange;
+		 
 		if (bufferBitRangeContainsDoubleStepBitRange) {
-			
-			// new air bit
-			AirBit *airSignalBit = [AirBit new];
 			
 			// for all shift steps
 			for (int shiftStep = 0; shiftStep<defaultShiftSteps; shiftStep++) {
 				
-//				printf("-- %u shift step, ", shiftStep);
-				
 				// get step data bit range
 				Float64 shiftDuration = (stepTimeDuration / 4) * shiftStep;
-				NSRange stepDataBitRange = [signalProcessor stepDataBitRangeWithStartTime:(currentStepStartTime + shiftDuration)];
+				NSRange stepDataBitRange = NSMakeRange(floor((currentStepStartTime + shiftDuration) / oneBitTimeLength), stepDataBitLength);
 				
 				// obtain step data
 				for (int i = 0; i < stepDataBitRange.length; i++) {
 					UInt32 globalIndex = stepDataBitRange.location + i;
-					UInt32 buffetIndex = globalIndex - bufferBitRange.location;
-					stepData[i] = buffer[buffetIndex];
+					UInt32 bufferIndex = globalIndex - bufferBitRange.location;
+					stepData[i] = buffer[bufferIndex];
 				}
 				
 				// fft zero-frequency amplitude
@@ -142,28 +118,28 @@ OSStatus RenderAudio(
 				
 				// calc & save shifted bit
 				char shiftedBit = (oneFrequencyAmplitude > zeroFrequencyAmplitude) ? 1 : 0;
-				[airSignalBit setBit:shiftedBit forShiftIndex:shiftStep];
+				[signalBit setBit:shiftedBit forShiftIndex:shiftStep];
 				
-//				printf("amp: (%f, %f), bit: %u\n", zeroFrequencyAmplitude, oneFrequencyAmplitude, (unsigned int)shiftedBit);
+				printf(".");
 			}
 			
 			// report air signal bit
-			[signalProcessor.delegate airSignalProcessor:signalProcessor didReceiveBit:airSignalBit];
-			 
+			[signalProcessor.delegate airSignalProcessor:signalProcessor didReceiveBit:signalBit];
+			
 			// buffer pop step-1
-			int stepBitLengthMinusOne = currentStepBitRange.length-1;
-			bufferBitRange.location += stepBitLengthMinusOne;
-			bufferBitRange.length -= stepBitLengthMinusOne;
+			int popLength = currentStepBitRange.location - bufferBitRange.location + currentStepBitRange.length - 1;
+			bufferBitRange.location += popLength;
+			bufferBitRange.length -= popLength;
 			for (int i=0; i<bufferBitRange.length; i++) {
-				buffer[i] = buffer[i + stepBitLengthMinusOne];
+				buffer[i] = buffer[i + popLength];
 			}
 			 
 			// inc current step
 			currentStep++;	
 		}
-	
+		
 	}// end loop
-
+	
 	// Mute output
 	for (UInt32 frame = 0; frame < inNumberFrames; frame++) {
 		buffer_left[frame]  = 0.0;
@@ -216,35 +192,27 @@ OSStatus RenderAudio(
 	if ((self = [super init])) {
 		
 		// default values
-		self.sampleRate = defaultSampleRate;
-		self.stepFrequency = defaultStepFrequency;
+		[self setSampleRate:defaultSampleRate];
+		[self setStepFrequency:defaultStepFrequency];
 		
 		NSLog(@"---");
 		NSLog(@"Signal Processor Init");
-		NSLog(@"sampleRate: %g", _sampleRate);
-		NSLog(@"stepFrequency: %g", _stepFrequency);
-		NSLog(@"stepBitLength: %u", (unsigned int)_stepBitLength);
+		NSLog(@"sampleRate:      %g", _sampleRate);
+		NSLog(@"stepFrequency:   %g", _stepFrequency);
+		NSLog(@"stepBitLength:     %u", (unsigned int)_stepBitLength);
 		NSLog(@"stepDataBitLength: %u", (unsigned int)_stepDataBitLength);
-		NSLog(@"bufferBitLength: %u", (unsigned int)_bufferBitLength);
+		NSLog(@"bufferBitLength:  %u", (unsigned int)_bufferBitLength);
 		NSLog(@"---");
 		
-//		NSLog(@"zeroBitFrequency: %g, optimized: %g", zeroBitFrequency, [self optimizeFrequency:zeroBitFrequency withNumberOfFrames:_stepDataBitLength]);
-//		NSLog(@"oneBitFrequency:  %g, optimized: %g", oneBitFrequency,  [self optimizeFrequency:oneBitFrequency withNumberOfFrames:_stepDataBitLength]);
-		
-		// refactor: check if you really have to create AudioUnit and all this stuff in init. probably don't have
-		
-		[self createAudioUnit];
-		
 		// create data processing queue
-		data_processing_queue = dispatch_queue_create("com.mylapka.air_signal_data_processing_queue", NULL);
-		
-		// SETUP FFT
-		self.fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength];
-		self.fftAnalyzer.sampleRate = _sampleRate;
-		
+		_data_processing_queue = dispatch_queue_create("com.mylapka.air_signal_data_processing_queue", NULL);
 
+		// alloc buffers
 		_buffer = (Float32 *) malloc(_bufferBitLength * sizeof(Float32));
 		_stepData = (Float32 *) malloc(_stepDataBitLength * sizeof(Float32));
+		
+		// create signal bit
+		_signalBit = [AirBit new];
 		
 		// reset counters
 		_bufferBitRange.location = 0;
@@ -258,6 +226,8 @@ OSStatus RenderAudio(
 
 - (void)dealloc {
 	
+	_data_processing_queue = nil;
+	_signalBit = nil;
 	self.fftAnalyzer = nil;
 	[self removeAudioUnit];
 	free(_buffer);
@@ -283,6 +253,7 @@ OSStatus RenderAudio(
 	
 	if (!_isProcessing) return;
 	self.isProcessing = NO;
+	printf("\n\n");
 	NSLog(@"stop air processing");
 	
 	[self stopAudioUnit];
@@ -295,6 +266,7 @@ OSStatus RenderAudio(
 
 - (void)createAudioUnit {
 	
+	printf("\n");
 	NSLog(@"create AudioUnit");
 	
 	// Configure the search parameters to find the default playback output unit
@@ -380,6 +352,7 @@ OSStatus RenderAudio(
 - (void)startAudioUnit {
 	
 	NSLog(@"start AudioUnit");
+	printf("\n");
 	
 	OSErr err = AudioOutputUnitStart(audioUnit);
 	NSAssert1(err == noErr, @"Error starting audio unit: %hd", err);
@@ -394,6 +367,27 @@ OSStatus RenderAudio(
 	NSAssert1(err == noErr, @"Error stopping audio unit: %hd", err);
 	
 	NSLog(@"stopped AudioUnit");
+}
+
+
+#pragma mark -
+#pragma mark FFT
+
+
+- (void)setupFFTAnalyzer {
+	
+	NSLog(@"setup FFT Analyzer");
+	
+	_fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength];
+	_fftAnalyzer.sampleRate = _sampleRate;
+}
+
+
+- (void)unsetupFFTAnalyzer {
+	
+	NSLog(@"unsetup FFT Analyzer");
+	
+	self.fftAnalyzer = nil;
 }
 
 
@@ -433,7 +427,6 @@ OSStatus RenderAudio(
 		int twoInLog2lengthPower = pow(2.0, log2length);
 		stepBitLength = twoInLog2lengthPower;
 	}
-	NSLog(@"stepBitLength: %d", stepBitLength);
 	
 	return stepBitLength;
 }
@@ -441,7 +434,8 @@ OSStatus RenderAudio(
 
 - (UInt32)bufferLengthWithStepBitLength:(UInt32)stepBitLength packetLength:(UInt32)packetLength {
 	
-	UInt32 bufferLength = 2 * stepBitLength + packetLength;
+	int bufferExtraBits = 2;
+	UInt32 bufferLength = 2 * stepBitLength + packetLength + bufferExtraBits;
 	return bufferLength;
 }
 

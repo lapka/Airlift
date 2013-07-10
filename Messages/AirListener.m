@@ -166,9 +166,12 @@
 		// default marker
 		_marker = 0xD391;
 		
-		self.buffer = [AirBuffer new];
-		self.airSignalProcessor = [AirSignalProcessor new];
+		_buffer = [AirBuffer new];
+		_airSignalProcessor = [AirSignalProcessor new];
 		_airSignalProcessor.delegate = self;
+		
+		// create data processing queue
+		_message_recognition_queue = dispatch_queue_create("com.mylapka.air_signal_message_recognition_queue", NULL);
 	}
 	return self;
 }
@@ -177,6 +180,7 @@
 - (void)dealloc {
 
 	self.airSignalProcessor = nil;
+	_message_recognition_queue = nil;
 }
 
 
@@ -186,7 +190,10 @@
 - (void)startListen {
 	
 	if (_isListening) return;
+	[_airSignalProcessor createAudioUnit];
+	[_airSignalProcessor setupFFTAnalyzer];
 	[_airSignalProcessor startProcessing];
+	
 	self.isListening = YES;
 }
 
@@ -195,6 +202,8 @@
 
 	if (!_isListening) return;
 	[_airSignalProcessor stopProcessing];
+	[_airSignalProcessor removeAudioUnit];
+	[_airSignalProcessor unsetupFFTAnalyzer];
 	self.isListening = NO;
 }
 
@@ -206,22 +215,28 @@
 	
 	[_buffer pushAirBit:bit];
 	
-	AirMessage *message = [self messageAtBuffer:_buffer withMarker:_marker];
-	if (message == nil) return;
-	
-	
-	// temporary get alco and pressure here
-	
-	BIT_ARRAY *data = [message data];
-	int pressureStartIndex = airMessageLength - markerLength - byteLength;
-	int alcoStartIndex = airMessageLength - markerLength - 3 * byteLength;
-	
-	uint8_t pressure = bit_array_get_word8(data, pressureStartIndex);
-	uint16_t alco = bit_array_get_word16(data, alcoStartIndex);
-	
-	printf("[pressure: %d, alco: %d]\n", pressure, alco);
-	
-	[self.delegate airListener:self didReceiveMessage:message];
+	// run message recognition in separate queue
+	dispatch_async(_message_recognition_queue, ^{
+		
+		AirMessage *message = [self messageAtBuffer:_buffer withMarker:_marker];
+		if (message == nil) return;
+
+		
+		// temporary get alco and pressure here
+		
+		BIT_ARRAY *data = [message data];
+		int pressureStartIndex = airMessageLength - markerLength - byteLength;
+		int alcoStartIndex = airMessageLength - markerLength - 3 * byteLength;
+		
+		uint8_t pressure = bit_array_get_word8(data, pressureStartIndex);
+		uint16_t alco = bit_array_get_word16(data, alcoStartIndex);
+		
+		printf("[pressure: %d, alco: %d]\n", pressure, alco);
+		
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[self.delegate airListener:self didReceiveMessage:message];
+		});
+	});
 }
 
 
