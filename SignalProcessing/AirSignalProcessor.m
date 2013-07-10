@@ -260,6 +260,8 @@ OSStatus RenderAudio(
 	
 	self.fftAnalyzer = nil;
 	[self removeAudioUnit];
+	free(_buffer);
+	free(_stepData);
 }
 
 

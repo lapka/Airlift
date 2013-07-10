@@ -57,6 +57,7 @@
 	
     vDSP_destroy_fftsetup(fft_setup);
     free(obtainedReal);
+	free(obtained_int);
     free(fft_complex_split.realp);
     free(fft_complex_split.imagp);
 }
