@@ -34,6 +34,7 @@
 
 @protocol AirListenerDelegate <NSObject>
 - (void)airListener:(AirListener *)airListener didReceiveMessage:(AirMessage *)message;
+- (void)airListenerDidLostMessage:(AirListener *)airListener;
 @end
 
 

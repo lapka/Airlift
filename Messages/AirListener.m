@@ -258,6 +258,10 @@
 	
 	if ([message checksum]) return message;
 	
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self.delegate airListenerDidLostMessage:self];
+	});
+	
 	printf(" X\n");
 	return nil;
 }
