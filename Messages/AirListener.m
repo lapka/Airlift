@@ -16,6 +16,7 @@
 #define markerBytesCount (markerLength / byteLength)
 #define messageBytesCount (airMessageLength / byteLength)
 
+#define doubledMessageTimeThreshold 0.05
 #define parallelBuffersCount 4
 #define gotcha_threshold 1
 #define noMessageIndex -1
@@ -170,6 +171,8 @@
 		_airSignalProcessor = [AirSignalProcessor new];
 		_airSignalProcessor.delegate = self;
 		
+		_lastMessageTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
+		
 		// create data processing queue
 		_message_recognition_queue = dispatch_queue_create("com.mylapka.air_signal_message_recognition_queue", NULL);
 	}
@@ -221,6 +224,15 @@
 		AirMessage *message = [self messageAtBuffer:_buffer withMarker:_marker];
 		if (message == nil) return;
 
+		// check time from last message
+		
+		NSTimeInterval currentTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
+		NSTimeInterval timeSinceLastMessage = currentTimestamp - _lastMessageTimestamp;
+		_lastMessageTimestamp = currentTimestamp;
+		if (timeSinceLastMessage < doubledMessageTimeThreshold) {
+			printf("[doubled]\n");
+			return;
+		}
 		
 		// temporary get alco and pressure here
 		

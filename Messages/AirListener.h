@@ -41,6 +41,7 @@
 
 @interface AirListener : NSObject <AirSignalProcessorDelegate> {
 	dispatch_queue_t _message_recognition_queue;
+	NSTimeInterval _lastMessageTimestamp;
 }
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
