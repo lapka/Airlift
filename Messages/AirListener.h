@@ -34,6 +34,7 @@
 
 @protocol AirListenerDelegate <NSObject>
 - (void)airListener:(AirListener *)airListener didReceiveMessage:(AirMessage *)message;
+- (void)airListener:(AirListener *)airListener didUpdatePressure:(float)pressure alco:(float)alco;
 - (void)airListenerDidLostMessage:(AirListener *)airListener;
 @end
 

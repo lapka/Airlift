@@ -235,6 +235,7 @@
 		
 		dispatch_async(dispatch_get_main_queue(), ^{
 			[self.delegate airListener:self didReceiveMessage:message];
+			[self.delegate airListener:self didUpdatePressure:pressure alco:alco];
 		});
 	});
 }
