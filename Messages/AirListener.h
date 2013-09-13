@@ -11,6 +11,8 @@
 @interface AirMessage : NSObject {
 	BIT_ARRAY *_data;
 }
+@property BOOL markerIsInverse;
+@property (strong) NSDate *time;
 - (id)initWithData:(BIT_ARRAY *)data;
 - (BOOL)checksum;
 - (BIT_ARRAY *)data;
@@ -42,6 +44,7 @@
 @interface AirListener : NSObject <AirSignalProcessorDelegate> {
 	dispatch_queue_t _message_recognition_queue;
 	NSTimeInterval _lastMessageTimestamp;
+	NSTimeInterval _lastInverseMessageTimestamp;
 }
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
@@ -49,6 +52,7 @@
 @property (nonatomic, strong) AirBuffer *buffer;
 @property BOOL isListening;
 @property uint16_t marker;
+@property uint16_t inverseMarker;
 
 - (void)startListen;
 - (void)stopListen;

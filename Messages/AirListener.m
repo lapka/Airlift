@@ -166,12 +166,14 @@
 		
 		// default marker
 		_marker = 0xD391;
+		_inverseMarker = 0x2C6E;
 		
 		_buffer = [AirBuffer new];
 		_airSignalProcessor = [AirSignalProcessor new];
 		_airSignalProcessor.delegate = self;
 		
 		_lastMessageTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
+		_lastInverseMessageTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
 		
 		// create data processing queue
 		_message_recognition_queue = dispatch_queue_create("com.mylapka.air_signal_message_recognition_queue", NULL);
@@ -222,33 +224,63 @@
 	dispatch_async(_message_recognition_queue, ^{
 		
 		AirMessage *message = [self messageAtBuffer:_buffer withMarker:_marker];
-		if (message == nil) return;
-
-		// check time from last message
-		
-		NSTimeInterval currentTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
-		NSTimeInterval timeSinceLastMessage = currentTimestamp - _lastMessageTimestamp;
-		_lastMessageTimestamp = currentTimestamp;
-		if (timeSinceLastMessage < doubledMessageTimeThreshold) {
-			printf("[doubled]\n");
-			return;
+		if (message != nil) {
+			
+			message.time = [NSDate new];
+			
+			// check time from last message
+			
+			NSTimeInterval currentTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
+			NSTimeInterval timeSinceLastMessage = currentTimestamp - _lastMessageTimestamp;
+			_lastMessageTimestamp = currentTimestamp;
+			if (timeSinceLastMessage > doubledMessageTimeThreshold) {
+				
+				// temporary get alco and pressure here
+				
+				BIT_ARRAY *data = [message data];
+				int pressureStartIndex = airMessageLength - markerLength - byteLength;
+				int alcoStartIndex = airMessageLength - markerLength - 3 * byteLength;
+				
+				uint8_t pressure = bit_array_get_word8(data, pressureStartIndex);
+				uint16_t alco = bit_array_get_word16(data, alcoStartIndex);
+				
+				printf("[pressure: %d, alco: %d]\n", pressure, alco);
+				
+				dispatch_async(dispatch_get_main_queue(), ^{
+					[self.delegate airListener:self didReceiveMessage:message];
+					[self.delegate airListener:self didUpdatePressure:pressure alco:alco];
+				});
+				
+			} else {
+				printf("[doubled]\n");
+			}
 		}
 		
-		// temporary get alco and pressure here
-		
-		BIT_ARRAY *data = [message data];
-		int pressureStartIndex = airMessageLength - markerLength - byteLength;
-		int alcoStartIndex = airMessageLength - markerLength - 3 * byteLength;
-		
-		uint8_t pressure = bit_array_get_word8(data, pressureStartIndex);
-		uint16_t alco = bit_array_get_word16(data, alcoStartIndex);
-		
-		printf("[pressure: %d, alco: %d]\n", pressure, alco);
-		
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[self.delegate airListener:self didReceiveMessage:message];
-			[self.delegate airListener:self didUpdatePressure:pressure alco:alco];
-		});
+		AirMessage *inverseMessage = [self messageAtBuffer:_buffer withMarker:_inverseMarker];
+		if (inverseMessage != nil) {
+			
+			inverseMessage.markerIsInverse = YES;
+			inverseMessage.time = [NSDate new];
+			
+			printf("\n\n\n\n\n\n\n!!!Inverse!!!\n\n\n\n\n\n\n");
+			
+			// check time from last message
+			
+			NSTimeInterval currentTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
+			NSTimeInterval timeSinceLastMessage = currentTimestamp - _lastInverseMessageTimestamp;
+			_lastInverseMessageTimestamp = currentTimestamp;
+			if (timeSinceLastMessage > doubledMessageTimeThreshold) {
+				
+				dispatch_async(dispatch_get_main_queue(), ^{
+					[self.delegate airListener:self didReceiveMessage:message];
+				});
+				
+			} else {
+				printf("[doubled]\n");
+			}
+			
+		}
+
 	});
 }
 
