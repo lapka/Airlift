@@ -36,7 +36,6 @@
 
 @protocol AirListenerDelegate <NSObject>
 - (void)airListener:(AirListener *)airListener didReceiveMessage:(AirMessage *)message;
-- (void)airListener:(AirListener *)airListener didUpdatePressure:(float)pressure alco:(float)alco;
 - (void)airListenerDidLostMessage:(AirListener *)airListener;
 @end
 
@@ -44,15 +43,15 @@
 @interface AirListener : NSObject <AirSignalProcessorDelegate> {
 	dispatch_queue_t _message_recognition_queue;
 	NSTimeInterval _lastMessageTimestamp;
-	NSTimeInterval _lastInverseMessageTimestamp;
 }
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
 @property (nonatomic, weak) NSObject <AirListenerDelegate> *delegate;
 @property (nonatomic, strong) AirBuffer *buffer;
 @property BOOL isListening;
+@property BOOL inverseMarker;
 @property uint16_t marker;
-@property uint16_t inverseMarker;
+
 
 - (void)startListen;
 - (void)stopListen;
