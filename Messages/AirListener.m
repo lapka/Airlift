@@ -32,6 +32,12 @@
 	if ((self = [super init])) {
 		_data = bit_array_create(airMessageLength);
 		bit_array_copy(_data, 0, data, 0, airMessageLength);
+		
+		// print marker
+		uint16_t marker_word = bit_array_get_word16(_data, airMessageLength - markerLength);
+		printf("\n(marker %04X)", marker_word);
+		
+		_isIntegral = [self checksum];
 	}
 	return self;
 }
@@ -56,21 +62,22 @@
 
 - (BOOL)checksum {
 	
-	// get 3 message bytes
+	// get 4 message bytes
 	uint8_t byte1 = [self byteAtIndex:markerBytesCount + 0];
 	uint8_t byte2 = [self byteAtIndex:markerBytesCount + 1];
 	uint8_t byte3 = [self byteAtIndex:markerBytesCount + 2];
-	printf("(bytes %02X, %02X, %02X)", byte1, byte2, byte3);
+	uint8_t byte4 = [self byteAtIndex:markerBytesCount + 3];
+	printf("(bytes %02X, %02X, %02X, %02X)", byte1, byte2, byte3, byte4);
 	
 	// calc crc
 	uint8_t b[3] = {byte1, byte2, byte3};
 	uint8_t crc = [self crc8_withBuffer:b length:3];
-	printf("(crc %02X)", crc);
+	printf("[crc %02X]", crc);
 	
 	// compare calculated crc with last message byte
-	uint8_t last_message_byte = [self byteAtIndex:messageBytesCount-1];
-	BOOL crcIsEqual = (crc == last_message_byte);
-
+	BOOL crcIsEqual = (crc == byte4);
+	printf(" %s\n", crcIsEqual?"V":"X");
+	
 	return crcIsEqual;
 }
 
@@ -156,14 +163,15 @@
 #pragma mark -
 
 
+
+
 @implementation AirListener
 
 
-- (id)init {
+- (id)initWithMarker:(uint16_t)marker {
 	if ((self = [super init])) {
 		
-		// default marker
-		_marker = 0xD391;
+		_marker = marker;
 		
 		_buffer = [AirBuffer new];
 		_airSignalProcessor = [AirSignalProcessor new];
@@ -223,17 +231,21 @@
 		AirMessage *message = [self messageAtBuffer:_buffer withMarker:marker];
 		
 		if (message == nil) return;
+		if (!message.isIntegral && !_debugMode) return;
+		
 		message.time = [NSDate new];
 		message.markerIsInverse = _inverseMarker;
 		
-		// check time from last message
+		// check time from last integral message
 		
-		NSTimeInterval currentTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
-		NSTimeInterval timeSinceLastMessage = currentTimestamp - _lastMessageTimestamp;
-		_lastMessageTimestamp = currentTimestamp;
-		if (timeSinceLastMessage < doubledMessageTimeThreshold) {
-			printf("[doubled]\n");
-			return;
+		if ([message isIntegral]) {
+			NSTimeInterval currentTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
+			NSTimeInterval timeSinceLastMessage = currentTimestamp - _lastMessageTimestamp;
+			_lastMessageTimestamp = currentTimestamp;
+			if (timeSinceLastMessage < doubledMessageTimeThreshold) {
+				printf("[doubled]\n");
+				return;
+			}
 		}
 					
 		dispatch_async(dispatch_get_main_queue(), ^{
@@ -255,19 +267,7 @@
 	BIT_ARRAY *parallelBufferWithMessage = [buffer parallelBufferAtIndex:indexOfParallelBufferWithMarker];
 	AirMessage *message = [[AirMessage alloc] initWithData:parallelBufferWithMessage];
 	
-	BIT_ARRAY *data = [message data];
-	
-	uint16_t marker_word = bit_array_get_word16(data, airMessageLength - markerLength);
-	printf("\n(marker %04X)", marker_word);
-	
-	if ([message checksum]) return message;
-	
-	dispatch_async(dispatch_get_main_queue(), ^{
-		[self.delegate airListenerDidLostMessage:self];
-	});
-	
-	printf(" X\n");
-	return nil;
+	return message;
 }
 
 

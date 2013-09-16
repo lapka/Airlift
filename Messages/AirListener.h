@@ -13,8 +13,8 @@
 }
 @property BOOL markerIsInverse;
 @property (strong) NSDate *time;
+@property (readonly) BOOL isIntegral;
 - (id)initWithData:(BIT_ARRAY *)data;
-- (BOOL)checksum;
 - (BIT_ARRAY *)data;
 - (uint8_t)byteAtIndex:(int)index;
 @end
@@ -36,7 +36,6 @@
 
 @protocol AirListenerDelegate <NSObject>
 - (void)airListener:(AirListener *)airListener didReceiveMessage:(AirMessage *)message;
-- (void)airListenerDidLostMessage:(AirListener *)airListener;
 @end
 
 
@@ -50,8 +49,10 @@
 @property (nonatomic, strong) AirBuffer *buffer;
 @property BOOL isListening;
 @property BOOL inverseMarker;
+@property BOOL debugMode;
 @property uint16_t marker;
 
+- (id)initWithMarker:(uint16_t)marker;
 
 - (void)startListen;
 - (void)stopListen;
