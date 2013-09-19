@@ -17,7 +17,6 @@
 #define doubledMessageTimeThreshold 0.05
 #define parallelBuffersCount 4
 #define gotcha_threshold 1
-#define noMessageIndex -1
 
 
 
@@ -165,6 +164,14 @@
 
 
 
+@interface AirListener ()
+@property uint16_t inverseMarker;
+@property uint16_t reverseMarker;
+@end
+
+
+
+
 @implementation AirListener
 
 
@@ -172,6 +179,8 @@
 	if ((self = [super init])) {
 		
 		_marker = marker;
+		_inverseMarker = [self inverseMarker:marker];
+		_reverseMarker = [self reverseMarker:marker];
 		
 		_buffer = [AirBuffer new];
 		_airSignalProcessor = [AirSignalProcessor new];
@@ -227,25 +236,18 @@
 	// run message recognition in separate queue
 	dispatch_async(_message_recognition_queue, ^{
 		
-		uint16_t marker = _inverseMarker ? (0xFFFF - _marker) : _marker;
-		AirMessage *message = [self messageAtBuffer:_buffer withMarker:marker];
-		
+		AirMessage *message = [self messageAtBuffer:_buffer];
 		if (message == nil) return;
-		if (!message.isIntegral && !_debugMode) return;
 		
 		message.time = [NSDate new];
-		message.markerIsInverse = _inverseMarker;
 		
-		// check time from last integral message
-		
-		if ([message isIntegral]) {
-			NSTimeInterval currentTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
-			NSTimeInterval timeSinceLastMessage = currentTimestamp - _lastMessageTimestamp;
-			_lastMessageTimestamp = currentTimestamp;
-			if (timeSinceLastMessage < doubledMessageTimeThreshold) {
-				printf("[doubled]\n");
-				return;
-			}
+		// check time from last message
+		NSTimeInterval currentTimestamp = [[NSDate date] timeIntervalSinceReferenceDate];
+		NSTimeInterval timeSinceLastMessage = currentTimestamp - _lastMessageTimestamp;
+		_lastMessageTimestamp = currentTimestamp;
+		if (timeSinceLastMessage < doubledMessageTimeThreshold) {
+			printf("[doubled]\n");
+			return;
 		}
 					
 		dispatch_async(dispatch_get_main_queue(), ^{
@@ -259,35 +261,57 @@
 #pragma mark Message recognition
 
 
-- (AirMessage *)messageAtBuffer:(AirBuffer *)buffer withMarker:(uint16_t)marker {
-	
-	int indexOfParallelBufferWithMarker = [self parallelBufferIndexAtBuffer:buffer withMarker:marker];
-	if (indexOfParallelBufferWithMarker == noMessageIndex) return nil;
-	
-	BIT_ARRAY *parallelBufferWithMessage = [buffer parallelBufferAtIndex:indexOfParallelBufferWithMarker];
-	AirMessage *message = [[AirMessage alloc] initWithData:parallelBufferWithMessage];
-	
-	return message;
-}
-
-
-/*
- *	Return parallel buffer index if that buffer begins with marker
- *	Otherwise return -1
- *
- *	Assumed marker is 16 bits long
- */
-- (int)parallelBufferIndexAtBuffer:(AirBuffer *)buffer withMarker:(uint16_t)marker {
+- (AirMessage *)messageAtBuffer:(AirBuffer *)buffer {
 	
 	int startIndex = airMessageLength - markerLength;
 	
+	// on each parallel buffer
 	for (int parallelIndex = 0; parallelIndex < parallelBuffersCount; parallelIndex++) {
 		BIT_ARRAY *parallelBuffer = [buffer parallelBufferAtIndex:parallelIndex];
 		uint16_t first_two_bytes_word = bit_array_get_word16(parallelBuffer, startIndex);
-		if (first_two_bytes_word == marker) return parallelIndex;
+		
+		if (first_two_bytes_word == _marker) {
+			AirMessage *message = [[AirMessage alloc] initWithData:parallelBuffer];
+			if (message.isIntegral) return message;
+		}
+		
+		if (first_two_bytes_word == _inverseMarker) {
+			AirMessage *message = [[AirMessage alloc] initWithData:parallelBuffer];
+			message.markerIsInverse = YES;
+			if (message.isIntegral) return message;
+		}
+		
+		if (first_two_bytes_word == _reverseMarker) {
+			AirMessage *message = [[AirMessage alloc] initWithData:parallelBuffer];
+			message.markerIsReverse = YES;
+			if (message.isIntegral) return message;
+		}
 	}
 	
-	return noMessageIndex;
+	return nil;
+}
+
+
+#pragma mark - Marker math
+
+
+- (uint16_t)reverseMarker:(uint16_t)marker {
+	
+	BIT_ARRAY *marker_array = bit_array_create(markerLength);
+	bit_array_set_word16(marker_array, 0, marker);
+	bit_array_reverse(marker_array);
+	uint16_t reverseMarker = bit_array_get_word16(marker_array, 0);
+	return reverseMarker;
+}
+
+
+- (uint16_t)inverseMarker:(uint16_t)marker {
+	
+	BIT_ARRAY *marker_array = bit_array_create(markerLength);
+	bit_array_set_word16(marker_array, 0, marker);
+	bit_array_toggle_all(marker_array);
+	uint16_t inverseMarker = bit_array_get_word16(marker_array, 0);
+	return inverseMarker;
 }
 
 

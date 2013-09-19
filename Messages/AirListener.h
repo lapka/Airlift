@@ -11,8 +11,9 @@
 @interface AirMessage : NSObject {
 	BIT_ARRAY *_data;
 }
-@property BOOL markerIsInverse;
 @property (strong) NSDate *time;
+@property BOOL markerIsInverse;
+@property BOOL markerIsReverse;
 @property (readonly) BOOL isIntegral;
 - (id)initWithData:(BIT_ARRAY *)data;
 - (BIT_ARRAY *)data;
@@ -47,10 +48,8 @@
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
 @property (nonatomic, weak) NSObject <AirListenerDelegate> *delegate;
 @property (nonatomic, strong) AirBuffer *buffer;
+@property (readonly) uint16_t marker;
 @property BOOL isListening;
-@property BOOL inverseMarker;
-@property BOOL debugMode;
-@property uint16_t marker;
 
 - (id)initWithMarker:(uint16_t)marker;
 
