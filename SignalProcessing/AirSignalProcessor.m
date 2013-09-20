@@ -7,12 +7,12 @@
 #import <Accelerate/Accelerate.h>
 
 #define defaultSampleRate		44100.0
-#define defaultStepFrequency	187.5
+#define defaultStepFrequency	86.0
 #define defaultPacketLength		1024
 #define defaultShiftSteps		4
 
-#define zeroBitFrequency		18000.0
-#define oneBitFrequency			18286.0
+#define zeroBitFrequency		17917.0
+#define oneBitFrequency			17997.0
 
 
 OSStatus RenderAudio(
@@ -198,7 +198,7 @@ OSStatus RenderAudio(
 		NSLog(@"---");
 		NSLog(@"Signal Processor Init");
 		NSLog(@"sampleRate:      %g", _sampleRate);
-		NSLog(@"stepFrequency:   %g", _stepFrequency);
+		NSLog(@"stepFrequency:     %3.0f", _stepFrequency);
 		NSLog(@"stepBitLength:     %u", (unsigned int)_stepBitLength);
 		NSLog(@"stepDataBitLength: %u", (unsigned int)_stepDataBitLength);
 		NSLog(@"bufferBitLength:  %u", (unsigned int)_bufferBitLength);
