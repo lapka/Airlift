@@ -93,7 +93,7 @@
 	
 	/* Find amplitude by frequency */
 	
-	UInt32 required_bin = frequency * n / sampleRate;
+	UInt32 required_bin = roundf(frequency * n / sampleRate);
 	
 	/* FFT Parts */
 	
