@@ -11,8 +11,8 @@
 #define defaultPacketLength		1024
 #define defaultShiftSteps		4
 
-#define zeroBitFrequency		17917.0
-#define oneBitFrequency			17997.0
+#define zeroBitFrequency		16795.90
+#define oneBitFrequency			16968.16
 
 
 OSStatus RenderAudio(
