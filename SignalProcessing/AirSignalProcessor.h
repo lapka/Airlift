@@ -10,18 +10,40 @@
 #include "bit_array.h"
 
 
-@interface AirBit : NSObject {
-	BIT_ARRAY *_shiftedBits;
+typedef enum {
+	AirWordValue_NoValue = -1,
+	AirWordValue_0 = 0,
+	AirWordValue_1,
+	AirWordValue_2,
+	AirWordValue_3,
+	AirWordValue_4,
+	AirWordValue_5,
+	AirWordValue_6,
+	AirWordValue_7,
+	AirWordValue_8,
+	AirWordValue_9,
+	AirWordValue_10,
+	AirWordValue_11,
+	AirWordValue_12,
+	AirWordValue_13,
+	AirWordValue_14,
+	AirWordValue_15,
+	AirWordValue_ControlSignal_1 = 16
+} AirWordValue;
+
+
+@interface AirWord : NSObject {
+	uint8_t *_shiftedWords;
+	Float32 *_shiftedWordPowers;
 }
-- (void)setBit:(char)bit forShiftIndex:(int)shiftIndex;
-- (char)bitWithShiftIndex:(int)shiftIndex;
+@property (nonatomic, readonly) int8_t value;
+- (void)setWord:(uint8_t)word withPower:(Float32)wordPower forShiftIndex:(int)shiftIndex;
+- (void)updateValue;
 @end
 
 
-@class AirSignalProcessor;
-
 @protocol AirSignalProcessorDelegate <NSObject>
-- (void)airSignalProcessor:(AirSignalProcessor *)airSignalProcessor didReceiveBit:(AirBit *)bit;
+- (void)airSignalProcessorDidReceiveWord:(AirWordValue)word;
 @end
 
 
@@ -41,7 +63,7 @@
 	UInt32 _stepDataBitLength; // optimized for fft
 	UInt32 _bufferBitLength;
 	
-	AirBit *_signalBit;
+	AirWord *_signalWord;
 	
 	dispatch_queue_t _data_processing_queue;
 }

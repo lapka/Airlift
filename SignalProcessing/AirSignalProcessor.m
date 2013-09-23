@@ -7,13 +7,30 @@
 #import <Accelerate/Accelerate.h>
 
 #define defaultSampleRate		44100.0
-#define defaultStepFrequency	86.0
+#define defaultStepFrequency	5.375
 #define defaultPacketLength		1024
 #define defaultShiftSteps		4
 
-#define zeroBitFrequency		16795.90
-#define oneBitFrequency			16968.16
+#define wordPowerThreshold		3.0
 
+#define wordFrequenciesCount	17
+#define word0Frequency			18222.47314
+#define word1Frequency			18244.00635
+#define word2Frequency			18265.53955
+#define word3Frequency			18432.42188
+#define word4Frequency			18453.95508
+#define word5Frequency			18475.48828
+#define word6Frequency			18497.02148
+#define word7Frequency			18518.55469
+#define word8Frequency			18540.08789
+#define word9Frequency			18561.62109
+#define word10Frequency			18583.1543
+#define word11Frequency			18604.6875
+#define word12Frequency			18626.2207
+#define word13Frequency			18647.75391
+#define word14Frequency			18669.28711
+#define word15Frequency			18690.82031
+#define word16Frequency			18120.19043
 
 OSStatus RenderAudio(
 					 void *inRefCon,
@@ -60,7 +77,7 @@ OSStatus RenderAudio(
 	Float64 stepTimeDuration = signalProcessor->_stepTimeDuration;
 	UInt32 stepBitLength = signalProcessor->_stepBitLength;
 	UInt32 stepDataBitLength = signalProcessor->_stepDataBitLength;
-	AirBit *signalBit = signalProcessor->_signalBit;
+	AirWord *signalWord = signalProcessor->_signalWord;
 	
 	// Set timestamp
 	if (zeroTimestamp == 0) {
@@ -103,31 +120,51 @@ OSStatus RenderAudio(
 				
 				// obtain step data
 				for (int i = 0; i < stepDataBitRange.length; i++) {
-					UInt32 globalIndex = stepDataBitRange.location + i;
-					UInt32 bufferIndex = globalIndex - bufferBitRange.location;
+					long int globalIndex = stepDataBitRange.location + i;
+					long int bufferIndex = globalIndex - bufferBitRange.location;
 					stepData[i] = buffer[bufferIndex];
 				}
 				
-				// fft zero-frequency amplitude
-				signalProcessor.fftAnalyzer.frequency = zeroBitFrequency;
-				Float32 zeroFrequencyAmplitude = [signalProcessor.fftAnalyzer processFFTWithData:stepData];
+				// process fft
+				Float32 *amplitudes = [signalProcessor.fftAnalyzer processFFTWithData:stepData];
 				
-				// fft one-frequency amplitude
-				signalProcessor.fftAnalyzer.frequency = oneBitFrequency;
-				Float32 oneFrequencyAmplitude = [signalProcessor.fftAnalyzer processFFTWithData:stepData];
+				// find first two maximums
+				Float32 firstMaximum = 0;
+				Float32 secondMaximum = 0;
+				int firstMaximumIndex = 0;
+				int secondMaximumIndex = 0;
+				for (int i = 0; i < wordFrequenciesCount; i++) {
+					Float32 amplitude = amplitudes[i];
+					if (amplitude > firstMaximum) {
+						firstMaximum = amplitude;
+						firstMaximumIndex = i;
+					}
+				}
+				for (int i = 0; i < wordFrequenciesCount; i++) {
+					if (i == firstMaximumIndex) continue;
+					Float32 amplitude = amplitudes[i];
+					if (amplitude > secondMaximum) {
+						secondMaximum = amplitude;
+						secondMaximumIndex = i;
+					}
+				}
 				
-				// calc & save shifted bit
-				char shiftedBit = (oneFrequencyAmplitude > zeroFrequencyAmplitude) ? 1 : 0;
-				[signalBit setBit:shiftedBit forShiftIndex:shiftStep];
+				// get the word
+				uint8_t word = firstMaximumIndex;
+				Float32 wordPower = firstMaximum / secondMaximum;
+				
+				[signalWord setWord:word withPower:wordPower forShiftIndex:shiftStep];
 				
 				printf(".");
 			}
 			
-			// report air signal bit
-			[signalProcessor.delegate airSignalProcessor:signalProcessor didReceiveBit:signalBit];
+			[signalWord updateValue];
+			
+			if (signalWord.value != AirWordValue_NoValue)
+				[signalProcessor.delegate airSignalProcessorDidReceiveWord:signalWord.value];
 			
 			// buffer pop step-1
-			int popLength = currentStepBitRange.location - bufferBitRange.location + currentStepBitRange.length - 1;
+			long int popLength = currentStepBitRange.location - bufferBitRange.location + currentStepBitRange.length - 1;
 			bufferBitRange.location += popLength;
 			bufferBitRange.length -= popLength;
 			for (int i=0; i<bufferBitRange.length; i++) {
@@ -157,25 +194,40 @@ OSStatus RenderAudio(
 }
 
 
-@implementation AirBit
+@implementation AirWord
 
 - (id)init {
 	if ((self = [super init])) {
-		_shiftedBits = bit_array_create(defaultShiftSteps);
+		_shiftedWords = (uint8_t *) malloc(defaultShiftSteps * sizeof(uint8_t));
+		_shiftedWordPowers = (Float32 *) malloc(defaultShiftSteps * sizeof(Float32));
 	}
 	return self;
 }
 
 - (void)dealloc {
-	bit_array_free(_shiftedBits);
+	free(_shiftedWords);
+	free(_shiftedWordPowers);
 }
 
-- (void)setBit:(char)bit forShiftIndex:(int)shiftIndex {
-	bit_array_assign(_shiftedBits, shiftIndex, bit);
+- (void)setWord:(uint8_t)word withPower:(Float32)wordPower forShiftIndex:(int)shiftIndex {
+	_shiftedWords[shiftIndex] = word;
+	_shiftedWordPowers[shiftIndex] = wordPower;
 }
 
-- (char)bitWithShiftIndex:(int)shiftIndex {
-	return bit_array_get(_shiftedBits, shiftIndex);
+- (void)updateValue {
+	
+	Float32 maxPower = 0;
+	uint8_t maxPowerIndex = 0;
+	
+	for (int i=0; i < defaultShiftSteps; i++) {
+		Float32 power = _shiftedWordPowers[i];
+		if (power > maxPower) {
+			maxPower = power;
+			maxPowerIndex = i;
+		}
+	}
+	
+	_value = (maxPower > wordPowerThreshold) ? _shiftedWords[maxPowerIndex] : AirWordValue_NoValue;
 }
 
 @end
@@ -198,7 +250,7 @@ OSStatus RenderAudio(
 		NSLog(@"---");
 		NSLog(@"Signal Processor Init");
 		NSLog(@"sampleRate:      %g", _sampleRate);
-		NSLog(@"stepFrequency:     %3.0f", _stepFrequency);
+		NSLog(@"stepFrequency:   %5.3f", _stepFrequency);
 		NSLog(@"stepBitLength:     %u", (unsigned int)_stepBitLength);
 		NSLog(@"stepDataBitLength: %u", (unsigned int)_stepDataBitLength);
 		NSLog(@"bufferBitLength:  %u", (unsigned int)_bufferBitLength);
@@ -211,8 +263,8 @@ OSStatus RenderAudio(
 		_buffer = (Float32 *) malloc(_bufferBitLength * sizeof(Float32));
 		_stepData = (Float32 *) malloc(_stepDataBitLength * sizeof(Float32));
 		
-		// create signal bit
-		_signalBit = [AirBit new];
+		// create signal word
+		_signalWord = [AirWord new];
 		
 		// reset counters
 		_bufferBitRange.location = 0;
@@ -227,7 +279,7 @@ OSStatus RenderAudio(
 - (void)dealloc {
 	
 	_data_processing_queue = nil;
-	_signalBit = nil;
+	_signalWord = nil;
 	self.fftAnalyzer = nil;
 	[self removeAudioUnit];
 	free(_buffer);
@@ -378,8 +430,29 @@ OSStatus RenderAudio(
 	
 	NSLog(@"setup FFT Analyzer");
 	
-	_fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength];
-	_fftAnalyzer.sampleRate = _sampleRate;
+	Float32 *wordFrequencies = (Float32 *)malloc(wordFrequenciesCount * sizeof(Float32));
+	
+	wordFrequencies[0] = word0Frequency;
+	wordFrequencies[1] = word1Frequency;
+	wordFrequencies[2] = word2Frequency;
+	wordFrequencies[3] = word3Frequency;
+	wordFrequencies[4] = word4Frequency;
+	wordFrequencies[5] = word5Frequency;
+	wordFrequencies[6] = word6Frequency;
+	wordFrequencies[7] = word7Frequency;
+	wordFrequencies[8] = word8Frequency;
+	wordFrequencies[9] = word9Frequency;
+	wordFrequencies[10] = word10Frequency;
+	wordFrequencies[11] = word11Frequency;
+	wordFrequencies[12] = word12Frequency;
+	wordFrequencies[13] = word13Frequency;
+	wordFrequencies[14] = word14Frequency;
+	wordFrequencies[15] = word15Frequency;
+	wordFrequencies[16] = word16Frequency;
+	
+	_fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength sampleRate:_sampleRate requiredFrequencies:wordFrequencies requiredFrequenciesCount:wordFrequenciesCount];
+	
+	free(wordFrequencies);
 }
 
 

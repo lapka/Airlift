@@ -108,7 +108,7 @@
 	/* Find amplitudes by required bins */
 	
 	for (int i = 0; i < _required_bins_count; i++) {
-		uint32_t required_bin = required_bins[i];
+		uint32_t required_bin = _required_bins[i];
 		double requiredReal = _fft_complex_split.realp[required_bin];
 		double requiredImag = _fft_complex_split.imagp[required_bin];
 		_amplitudes[i] = sqrtf(requiredReal * requiredReal + requiredImag * requiredImag);
