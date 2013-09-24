@@ -11,15 +11,16 @@
 @interface AirMessage : NSObject
 
 @property (strong) NSDate *time;
-@property AirWordValue word;
+@property AirWordValue value;
 
-+ (AirMessage *)messageWithWord:(AirWordValue)word;
++ (AirMessage *)messageWithValue:(AirWordValue)value;
 
 @end
 
 
 @protocol AirListenerDelegate <NSObject>
 - (void)airListenerDidReceiveMessage:(AirMessage *)message;
+- (void)airListenerDidReceiveControlSignal:(AirMessage *)message;
 @end
 
 

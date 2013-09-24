@@ -15,9 +15,9 @@
 
 @implementation AirMessage
 
-+ (AirMessage *)messageWithWord:(AirWordValue)word {
++ (AirMessage *)messageWithValue:(AirWordValue)value {
 	AirMessage *message = [[AirMessage alloc] init];
-	message.word = word;
+	message.value = value;
 	return message;
 }
 
@@ -85,14 +85,18 @@
 
 - (void)airSignalProcessorDidReceiveWord:(AirWordValue)word {
 	
-	// run message recognition in separate queue
 	dispatch_async(_message_recognition_queue, ^{
 		
-		AirMessage *message = [AirMessage messageWithWord:word];
-		message.time = [NSDate new];
+		AirMessage *message = [AirMessage messageWithValue:word];
+		message.time = [NSDate date];
 					
 		dispatch_async(dispatch_get_main_queue(), ^{
-			[self.delegate airListenerDidReceiveMessage:message];
+			
+			if (message.value == AirWordValue_ControlSignal_1)
+				[self.delegate airListenerDidReceiveControlSignal:message];
+			
+			else
+				[self.delegate airListenerDidReceiveMessage:message];
 		});
 
 	});
