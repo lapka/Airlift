@@ -28,7 +28,8 @@ typedef enum {
 	AirWordValue_13,
 	AirWordValue_14,
 	AirWordValue_15,
-	AirWordValue_ControlSignal_1 = 16
+	AirWordValue_ControlSignal_1 = 16,
+	AirWordValue_Sync = 17
 } AirWordValue;
 
 
@@ -38,7 +39,16 @@ typedef enum {
 }
 @property (nonatomic, readonly) int8_t value;
 - (void)setWord:(uint8_t)word withPower:(Float32)wordPower forShiftIndex:(int)shiftIndex;
-- (void)updateValue;
+- (void)updateValueWithPhase:(int)phase;
+@end
+
+
+@interface AirPhaseFilter : NSObject {
+	Float64 *_syncAmplitudes;
+}
+- (void)addSyncAmplitude:(Float64)syncAmplitude forShiftIndex:(int)shiftIndex;
+- (int)currentPhase;
+- (void)reset;
 @end
 
 
@@ -64,6 +74,7 @@ typedef enum {
 	UInt32 _bufferBitLength;
 	
 	AirWord *_signalWord;
+	AirPhaseFilter *_phaseFilter;
 	
 	dispatch_queue_t _data_processing_queue;
 }

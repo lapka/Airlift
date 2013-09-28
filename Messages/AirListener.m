@@ -92,7 +92,7 @@
 					
 		dispatch_async(dispatch_get_main_queue(), ^{
 			
-			if (message.value == AirWordValue_ControlSignal_1)
+			if (message.value > AirWordValue_15)
 				[self.delegate airListenerDidReceiveControlSignal:message];
 			
 			else
