@@ -16,6 +16,7 @@
 				  sampleRate:(Float32)sampleRate
 		 requiredFrequencies:(Float32 *)requiredFrequencies
 	requiredFrequenciesCount:(int)requiredFrequenciesCount
+	   doplerCorrectionRange:(int)doplerCorrectionRange
 {
 	if ((self = [super init])) {
 		
@@ -56,6 +57,8 @@
 		for (int i = 0; i < _required_bins_count; i++) {
 			_required_bins[i] = roundf(requiredFrequencies[i] * _n / _sampleRate);
 		}
+		
+		_doplerCorrectionRange = doplerCorrectionRange;
 		
 		// Create amplitudes array
 		_amplitudes = (Float32 *) malloc(_required_bins_count * sizeof(Float32));
@@ -109,9 +112,16 @@
 	
 	for (int i = 0; i < _required_bins_count; i++) {
 		uint32_t required_bin = _required_bins[i];
-		double requiredReal = _fft_complex_split.realp[required_bin];
-		double requiredImag = _fft_complex_split.imagp[required_bin];
-		_amplitudes[i] = sqrtf(requiredReal * requiredReal + requiredImag * requiredImag);
+		
+		// Fix dopler effect by taking max from neigbours
+		Float32 maxAmplitude = 0;
+		for (int j = -_doplerCorrectionRange; j < (_doplerCorrectionRange + 1); j++) {
+			double requiredReal = _fft_complex_split.realp[required_bin+j];
+			double requiredImag = _fft_complex_split.imagp[required_bin+j];
+			Float32 amplitude = sqrtf(requiredReal * requiredReal + requiredImag * requiredImag);
+			maxAmplitude = MAX(maxAmplitude, amplitude);
+		}
+		_amplitudes[i] = maxAmplitude;
 	}
 
 	return _amplitudes;

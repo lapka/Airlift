@@ -23,9 +23,10 @@
 	uint32_t	   *_required_bins;
 	uint32_t		_required_bins_count;
 	Float32		   *_amplitudes;
+	uint32_t		_doplerCorrectionRange;
 }
 
-- (id)initWithNumberOfFrames:(UInt32)numberOfFrames sampleRate:(Float32)sampleRate requiredFrequencies:(Float32 *)requiredFrequencies requiredFrequenciesCount:(int)requiredFrequenciesCount;
+- (id)initWithNumberOfFrames:(UInt32)numberOfFrames sampleRate:(Float32)sampleRate requiredFrequencies:(Float32 *)requiredFrequencies requiredFrequenciesCount:(int)requiredFrequenciesCount doplerCorrectionRange:(int)doplerCorrectionRange;
 - (Float32 *)processFFTWithData:(Float32 *)data;
 
 @end
