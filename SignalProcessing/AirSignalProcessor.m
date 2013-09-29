@@ -8,12 +8,18 @@
 
 #define defaultSampleRate		44100.0
 #define defaultStepFrequency	5.375
+//#define defaultStepFrequency	10.75
 #define defaultPacketLength		1024
 #define defaultShiftSteps		4
+
+#define doplerCorrection		3	// for 5.375 Hz
+//#define doplerCorrection		1	// for 10.75 Hz
 
 #define wordPowerThreshold		3.0
 
 #define wordFrequenciesCount	18
+
+// frequencies for 5.375
 #define word0Frequency			18077.12402
 #define word1Frequency			18120.19043
 #define word2Frequency			18163.25684
@@ -32,6 +38,28 @@
 #define word15Frequency			18712.35352
 #define word16Frequency			18755.41992
 #define word17Frequency			18803.86963
+
+// frequencies for 10.75
+/*
+#define word0Frequency			18077.12402
+#define word1Frequency			18120.19043
+#define word2Frequency			18163.25684
+#define word3Frequency			18206.32324
+#define word4Frequency			18249.38965
+#define word5Frequency			18281.68945
+#define word6Frequency			18324.75586
+#define word7Frequency			18367.82227
+#define word8Frequency			18410.88867
+#define word9Frequency			18453.95508
+#define word10Frequency			18497.02148
+#define word11Frequency			18540.08789
+#define word12Frequency			18583.1543
+#define word13Frequency			18626.2207
+#define word14Frequency			18669.28711
+#define word15Frequency			18712.35352
+#define word16Frequency			18755.41992
+#define word17Frequency			18798.48633
+*/
 
 OSStatus RenderAudio(
 					 void *inRefCon,
@@ -130,6 +158,10 @@ OSStatus RenderAudio(
 				// process fft
 				Float32 *amplitudes = [signalProcessor.fftAnalyzer processFFTWithData:stepData];
 				
+				// update equalizer
+				if (shiftStep == 0)
+					[signalProcessor.equalizer updateWithAmplitudes:amplitudes count:wordFrequenciesCount];
+				
 				// process phase filter
 				[phaseFilter addSyncAmplitude:amplitudes[AirWordValue_Sync] forShiftIndex:shiftStep];
 				
@@ -148,14 +180,14 @@ OSStatus RenderAudio(
 				
 				// get the word
 				uint8_t word = maximumIndex;
-				Float32 power = maximum / average;
-				
+				Float32 power = (average == 0) ? 0 : maximum / average;
 				[signalWord setWord:word withPower:power forShiftIndex:shiftStep];
 				
 				printf(".");
 			}
 			
 			[signalWord updateValueWithPhase:[phaseFilter currentPhase]];
+			[phaseFilter toggleCurrentStep];
 			
 			if (signalWord.value != AirWordValue_NoValue)
 				[signalProcessor.delegate airSignalProcessorDidReceiveWord:signalWord.value];
@@ -215,10 +247,6 @@ OSStatus RenderAudio(
 	
 	Float32 power = _shiftedWordPowers[phase];
 	_value = (power > wordPowerThreshold) ? _shiftedWords[phase] : AirWordValue_NoValue;
-	
-	// trace max power
-	if (_value != AirWordValue_NoValue)
-		printf("\nphase %d\n", phase);
 }
 
 @end
@@ -228,18 +256,36 @@ OSStatus RenderAudio(
 
 - (id)init {
 	if ((self = [super init])) {
-		_syncAmplitudes = (Float64 *) malloc(defaultShiftSteps * sizeof(Float64));
+		_oddSyncAmplitudes = (Float64 *) malloc(defaultShiftSteps * sizeof(Float64));
+		_evenSyncAmplitudes = (Float64 *) malloc(defaultShiftSteps * sizeof(Float64));
+		_currentStep = AirPhaseFilterStepOdd;
 		[self reset];
 	}
 	return self;
 }
 
 - (void)dealloc {
-	free(_syncAmplitudes);
+	free(_oddSyncAmplitudes);
+	free(_evenSyncAmplitudes);
 }
 
 - (void)addSyncAmplitude:(Float64)syncAmplitude forShiftIndex:(int)shiftIndex {
-	_syncAmplitudes[shiftIndex] = _syncAmplitudes[shiftIndex] + syncAmplitude;
+	if (_currentStep == AirPhaseFilterStepOdd) {
+		_oddSyncAmplitudes[shiftIndex] = _oddSyncAmplitudes[shiftIndex] + syncAmplitude;
+	} else {
+		_evenSyncAmplitudes[shiftIndex] = _evenSyncAmplitudes[shiftIndex] + syncAmplitude;
+	}
+}
+
+- (Float64)oddSyncAmplitudeForShiftIndex:(int)shiftIndex {
+	return _oddSyncAmplitudes[shiftIndex];
+}
+- (Float64)evenSyncAmplitudeForShiftIndex:(int)shiftIndex {
+	return _evenSyncAmplitudes[shiftIndex];
+}
+
+- (void)toggleCurrentStep {
+	_currentStep = (_currentStep == AirPhaseFilterStepOdd) ? AirPhaseFilterStepEven : AirPhaseFilterStepOdd;
 }
 
 - (int)currentPhase {
@@ -249,11 +295,13 @@ OSStatus RenderAudio(
 - (int)maxSyncAmplitudeIndex {
 	Float64 maxAmplitude = 0;
 	int maxAmplitudeIndex = 0;
-	for (int i = 0; i < defaultShiftSteps; i++) {
-		Float64 amplitude = _syncAmplitudes[i];
-		if (amplitude > maxAmplitude) {
-			maxAmplitude = amplitude;
-			maxAmplitudeIndex = i;
+	for (int even = 0; even < 2; even++) {
+		for (int i = 0; i < defaultShiftSteps; i++) {
+			Float64 amplitude = (even) ? _evenSyncAmplitudes[i] : _oddSyncAmplitudes[i];
+			if (amplitude > maxAmplitude) {
+				maxAmplitude = amplitude;
+				maxAmplitudeIndex = i;
+			}
 		}
 	}
 	return maxAmplitudeIndex;
@@ -261,7 +309,8 @@ OSStatus RenderAudio(
 
 - (void)reset {
 	for (int i = 0; i < defaultShiftSteps; i++) {
-		_syncAmplitudes[i] = 0;
+		_oddSyncAmplitudes[i] = 0;
+		_evenSyncAmplitudes[i] = 0;
 	}
 }
 
@@ -504,7 +553,7 @@ OSStatus RenderAudio(
 	wordFrequencies[16] = word16Frequency;
 	wordFrequencies[17] = word17Frequency;
 	
-	_fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength sampleRate:_sampleRate requiredFrequencies:wordFrequencies requiredFrequenciesCount:wordFrequenciesCount];
+	_fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength sampleRate:_sampleRate requiredFrequencies:wordFrequencies requiredFrequenciesCount:wordFrequenciesCount doplerCorrectionRange:doplerCorrection];
 	
 	free(wordFrequencies);
 }

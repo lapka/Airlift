@@ -43,10 +43,20 @@ typedef enum {
 @end
 
 
+typedef enum {
+	AirPhaseFilterStepOdd,
+	AirPhaseFilterStepEven
+} AirPhaseFilterStep;
+
 @interface AirPhaseFilter : NSObject {
-	Float64 *_syncAmplitudes;
+	Float64 *_oddSyncAmplitudes;
+	Float64 *_evenSyncAmplitudes;
 }
+@property AirPhaseFilterStep currentStep;
 - (void)addSyncAmplitude:(Float64)syncAmplitude forShiftIndex:(int)shiftIndex;
+- (Float64)oddSyncAmplitudeForShiftIndex:(int)shiftIndex;
+- (Float64)evenSyncAmplitudeForShiftIndex:(int)shiftIndex;
+- (void)toggleCurrentStep;
 - (int)currentPhase;
 - (void)reset;
 @end
@@ -54,6 +64,10 @@ typedef enum {
 
 @protocol AirSignalProcessorDelegate <NSObject>
 - (void)airSignalProcessorDidReceiveWord:(AirWordValue)word;
+@end
+
+@protocol AirSignalProcessorEqualizer <NSObject>
+- (void)updateWithAmplitudes:(Float32 *)amplitudes count:(int)count;
 @end
 
 
@@ -80,6 +94,7 @@ typedef enum {
 }
 
 @property (nonatomic, weak) NSObject <AirSignalProcessorDelegate> *delegate;
+@property (nonatomic, weak) NSObject <AirSignalProcessorEqualizer> *equalizer;
 @property (nonatomic, strong) AirSignalFFTAnalyzer *fftAnalyzer;
 @property (nonatomic) Float32 sampleRate;
 @property (nonatomic) double stepFrequency;

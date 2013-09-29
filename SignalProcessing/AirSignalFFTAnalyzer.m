@@ -115,7 +115,9 @@
 		
 		// Fix dopler effect by taking max from neigbours
 		Float32 maxAmplitude = 0;
-		for (int j = -_doplerCorrectionRange; j < (_doplerCorrectionRange + 1); j++) {
+		int from = 0 - _doplerCorrectionRange;
+		int to = _doplerCorrectionRange + 1;
+		for (int j = from; j < to; j++) {
 			double requiredReal = _fft_complex_split.realp[required_bin+j];
 			double requiredImag = _fft_complex_split.imagp[required_bin+j];
 			Float32 amplitude = sqrtf(requiredReal * requiredReal + requiredImag * requiredImag);
