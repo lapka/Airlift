@@ -1096,6 +1096,17 @@ void _bit_array_set_word8(const char *file, int line,
   _set_byte(bitarr, start, byte);
 }
 
+void _bit_array_set_word4(const char *file, int line,
+                           BIT_ARRAY* bitarr,
+                           bit_index_t start, uint8_t word)
+{
+	// Bounds checking
+	_bounds_check_start(bitarr, start, file, line, "bit_array_set_word4");
+	
+	word_t w = _get_word(bitarr, start);
+	_set_word(bitarr, start, (w & ~(word_t)0xf) | word);
+}
+
 //
 // Number/position of bits set
 //

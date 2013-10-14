@@ -118,6 +118,7 @@ char bit_array_ensure_size(BIT_ARRAY* bitarr, bit_index_t ensure_num_of_bits);
 #define bit_array_set_word32(bitarr,start,word) _bit_array_set_word32(__FILE__,__LINE__,bitarr,start,word)
 #define bit_array_set_word16(bitarr,start,word) _bit_array_set_word16(__FILE__,__LINE__,bitarr,start,word)
 #define bit_array_set_word8(bitarr,start,word) _bit_array_set_word8(__FILE__,__LINE__,bitarr,start,word)
+#define bit_array_set_word4(bitarr,start,word) _bit_array_set_word4(__FILE__,__LINE__,bitarr,start,word)
 
 #define bit_array_reverse_region(arr,start,len) \
         _bit_array_reverse_region(__FILE__,__LINE__,arr,start,len)
@@ -254,6 +255,8 @@ void _bit_array_set_word16(const char *file, int line,
                            BIT_ARRAY* bitarr, bit_index_t start, uint16_t word);
 void _bit_array_set_word8(const char *file, int line,
                            BIT_ARRAY* bitarr, bit_index_t start, uint8_t byte);
+void _bit_array_set_word4(const char *file, int line,
+						   BIT_ARRAY* bitarr, bit_index_t start, uint8_t word);
 
 //
 // Number of bits set
