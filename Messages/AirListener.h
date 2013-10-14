@@ -8,19 +8,34 @@
 #include "bit_array.h"
 
 
-@interface AirMessage : NSObject
-
+@interface AirMessage : NSObject {
+	BIT_ARRAY *_data;
+}
+@property BOOL isShort;
+@property int markerID;
 @property (strong) NSDate *time;
-@property AirWordValue value;
+- (id)initWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort;
+- (BIT_ARRAY *)data;
 
-+ (AirMessage *)messageWithValue:(AirWordValue)value;
++ (AirMessage *)messageWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort;
 
+@end
+
+
+@interface AirBuffer : NSObject {
+	uint8_t *_parallelBuffer_one;
+	uint8_t *_parallelBuffer_two;
+	uint8_t *_parallelBuffer_three;
+	uint8_t *_parallelBuffer_four;
+}
+- (void)pushAirWord:(AirWord *)airWord;
+- (uint8_t)wordAtIndex:(int)index parallelIndex:(int)parallelIndex;
+- (uint8_t *)parallelBufferAtIndex:(int)parallelIndex;
 @end
 
 
 @protocol AirListenerDelegate <NSObject>
 - (void)airListenerDidReceiveMessage:(AirMessage *)message;
-- (void)airListenerDidReceiveControlSignal:(AirMessage *)message;
 @end
 
 
@@ -30,6 +45,7 @@
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
 @property (nonatomic, weak) NSObject <AirListenerDelegate> *delegate;
+@property (nonatomic, strong) AirBuffer *buffer;
 @property BOOL isListening;
 
 - (void)startListen;

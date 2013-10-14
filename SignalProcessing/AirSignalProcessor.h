@@ -28,43 +28,24 @@ typedef enum {
 	AirWordValue_13,
 	AirWordValue_14,
 	AirWordValue_15,
-	AirWordValue_ControlSignal_1 = 16,
-	AirWordValue_Sync = 17
+	AirWordValue_Marker_1 = 16,
+	AirWordValue_Marker_2,
+	AirWordValue_Marker_3
 } AirWordValue;
 
 
 @interface AirWord : NSObject {
 	uint8_t *_shiftedWords;
-	Float32 *_shiftedWordPowers;
 }
-@property (nonatomic, readonly) int8_t value;
-- (void)setWord:(uint8_t)word withPower:(Float32)wordPower forShiftIndex:(int)shiftIndex;
-- (void)updateValueWithPhase:(int)phase;
-@end
-
-
-typedef enum {
-	AirPhaseFilterStepOdd,
-	AirPhaseFilterStepEven
-} AirPhaseFilterStep;
-
-@interface AirPhaseFilter : NSObject {
-	Float64 *_oddSyncAmplitudes;
-	Float64 *_evenSyncAmplitudes;
-}
-@property AirPhaseFilterStep currentStep;
-- (void)addSyncAmplitude:(Float64)syncAmplitude forShiftIndex:(int)shiftIndex;
-- (Float64)oddSyncAmplitudeForShiftIndex:(int)shiftIndex;
-- (Float64)evenSyncAmplitudeForShiftIndex:(int)shiftIndex;
-- (void)toggleCurrentStep;
-- (int)currentPhase;
-- (void)reset;
+- (void)setWord:(uint8_t)word forShiftIndex:(int)shiftIndex;
+- (uint8_t)wordForShiftIndex:(int)shiftIndex;
 @end
 
 
 @protocol AirSignalProcessorDelegate <NSObject>
-- (void)airSignalProcessorDidReceiveWord:(AirWordValue)word;
+- (void)airSignalProcessorDidReceiveWord:(AirWord *)word;
 @end
+
 
 @protocol AirSignalProcessorEqualizer <NSObject>
 - (void)updateWithAmplitudes:(Float32 *)amplitudes count:(int)count;
@@ -88,7 +69,6 @@ typedef enum {
 	UInt32 _bufferBitLength;
 	
 	AirWord *_signalWord;
-	AirPhaseFilter *_phaseFilter;
 	
 	dispatch_queue_t _data_processing_queue;
 }

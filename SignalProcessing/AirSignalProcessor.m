@@ -7,59 +7,37 @@
 #import <Accelerate/Accelerate.h>
 
 #define defaultSampleRate		44100.0
-#define defaultStepFrequency	5.375
-//#define defaultStepFrequency	10.75
+#define defaultStepFrequency	10.7666
 #define defaultPacketLength		1024
 #define defaultShiftSteps		4
 
-#define doplerCorrection		3	// for 5.375 Hz
-//#define doplerCorrection		1	// for 10.75 Hz
+#define doplerCorrection		1
 
 #define wordPowerThreshold		3.0
 
-#define wordFrequenciesCount	18
 
-// frequencies for 5.375
-#define word0Frequency			18077.12402
-#define word1Frequency			18120.19043
-#define word2Frequency			18163.25684
-#define word3Frequency			18200.93994
-#define word4Frequency			18244.00635
-#define word5Frequency			18287.07275
-#define word6Frequency			18330.13916
-#define word7Frequency			18367.82227
-#define word8Frequency			18410.88867
-#define word9Frequency			18453.95508
-#define word10Frequency			18497.02148
-#define word11Frequency			18540.08789
-#define word12Frequency			18583.1543
-#define word13Frequency			18626.2207
-#define word14Frequency			18669.28711
-#define word15Frequency			18712.35352
-#define word16Frequency			18755.41992
-#define word17Frequency			18803.86963
+#define frequenciesCount	19
 
-// frequencies for 10.75
-/*
-#define word0Frequency			18077.12402
-#define word1Frequency			18120.19043
-#define word2Frequency			18163.25684
-#define word3Frequency			18206.32324
-#define word4Frequency			18249.38965
-#define word5Frequency			18281.68945
-#define word6Frequency			18324.75586
-#define word7Frequency			18367.82227
-#define word8Frequency			18410.88867
-#define word9Frequency			18453.95508
-#define word10Frequency			18497.02148
-#define word11Frequency			18540.08789
-#define word12Frequency			18583.1543
-#define word13Frequency			18626.2207
-#define word14Frequency			18669.28711
-#define word15Frequency			18712.35352
-#define word16Frequency			18755.41992
-#define word17Frequency			18798.48633
-*/
+#define frequency_0			18077.12402
+#define frequency_1			18120.19043
+#define frequency_2			18163.25684
+#define frequency_3			18206.32324
+#define frequency_4			18249.38965
+#define frequency_5			18281.68945
+#define frequency_6			18324.75586
+#define frequency_7			18367.82227
+#define frequency_8			18410.88867
+#define frequency_9			18453.95508
+#define frequency_10		18497.02148
+#define frequency_11		18540.08789
+#define frequency_12		18583.1543
+#define frequency_13		18626.2207
+#define frequency_14		18669.28711
+#define frequency_15		18712.35352
+#define frequency_16		18755.41992
+#define frequency_17		18798.48633
+#define frequency_18		18841.55273
+
 
 OSStatus RenderAudio(
 					 void *inRefCon,
@@ -107,7 +85,6 @@ OSStatus RenderAudio(
 	UInt32 stepBitLength = signalProcessor->_stepBitLength;
 	UInt32 stepDataBitLength = signalProcessor->_stepDataBitLength;
 	AirWord *signalWord = signalProcessor->_signalWord;
-	AirPhaseFilter *phaseFilter = signalProcessor->_phaseFilter;
 	
 	// Set timestamp
 	if (zeroTimestamp == 0) {
@@ -160,18 +137,13 @@ OSStatus RenderAudio(
 				
 				// update equalizer
 				if (shiftStep == 0)
-					[signalProcessor.equalizer updateWithAmplitudes:amplitudes count:wordFrequenciesCount];
+					[signalProcessor.equalizer updateWithAmplitudes:amplitudes count:frequenciesCount];
 				
-				// process phase filter
-				[phaseFilter addSyncAmplitude:amplitudes[AirWordValue_Sync] forShiftIndex:shiftStep];
-				
-				// find average and maximum amplitudes
-				Float32 average = 0;
+				// find maximum amplitude
 				Float32 maximum = 0;
 				int maximumIndex = 0;
-				for (int i = 0; i < wordFrequenciesCount; i++) {
+				for (int i = 0; i < frequenciesCount; i++) {
 					Float32 amplitude = amplitudes[i];
-					average += amplitude / wordFrequenciesCount;
 					if (amplitude > maximum) {
 						maximum = amplitude;
 						maximumIndex = i;
@@ -180,17 +152,12 @@ OSStatus RenderAudio(
 				
 				// get the word
 				uint8_t word = maximumIndex;
-				Float32 power = (average == 0) ? 0 : maximum / average;
-				[signalWord setWord:word withPower:power forShiftIndex:shiftStep];
+				[signalWord setWord:word forShiftIndex:shiftStep];
 				
 				printf(".");
 			}
 			
-			[signalWord updateValueWithPhase:[phaseFilter currentPhase]];
-			[phaseFilter toggleCurrentStep];
-			
-			if (signalWord.value != AirWordValue_NoValue)
-				[signalProcessor.delegate airSignalProcessorDidReceiveWord:signalWord.value];
+			[signalProcessor.delegate airSignalProcessorDidReceiveWord:signalWord];
 			
 			// buffer pop step-1
 			long int popLength = currentStepBitRange.location - bufferBitRange.location + currentStepBitRange.length - 1;
@@ -228,90 +195,20 @@ OSStatus RenderAudio(
 - (id)init {
 	if ((self = [super init])) {
 		_shiftedWords = (uint8_t *) malloc(defaultShiftSteps * sizeof(uint8_t));
-		_shiftedWordPowers = (Float32 *) malloc(defaultShiftSteps * sizeof(Float32));
 	}
 	return self;
 }
 
 - (void)dealloc {
 	free(_shiftedWords);
-	free(_shiftedWordPowers);
 }
 
-- (void)setWord:(uint8_t)word withPower:(Float32)wordPower forShiftIndex:(int)shiftIndex {
+- (void)setWord:(uint8_t)word forShiftIndex:(int)shiftIndex {
 	_shiftedWords[shiftIndex] = word;
-	_shiftedWordPowers[shiftIndex] = wordPower;
 }
 
-- (void)updateValueWithPhase:(int)phase {
-	
-	Float32 power = _shiftedWordPowers[phase];
-	_value = (power > wordPowerThreshold) ? _shiftedWords[phase] : AirWordValue_NoValue;
-}
-
-@end
-
-
-@implementation AirPhaseFilter
-
-- (id)init {
-	if ((self = [super init])) {
-		_oddSyncAmplitudes = (Float64 *) malloc(defaultShiftSteps * sizeof(Float64));
-		_evenSyncAmplitudes = (Float64 *) malloc(defaultShiftSteps * sizeof(Float64));
-		_currentStep = AirPhaseFilterStepOdd;
-		[self reset];
-	}
-	return self;
-}
-
-- (void)dealloc {
-	free(_oddSyncAmplitudes);
-	free(_evenSyncAmplitudes);
-}
-
-- (void)addSyncAmplitude:(Float64)syncAmplitude forShiftIndex:(int)shiftIndex {
-	if (_currentStep == AirPhaseFilterStepOdd) {
-		_oddSyncAmplitudes[shiftIndex] = _oddSyncAmplitudes[shiftIndex] + syncAmplitude;
-	} else {
-		_evenSyncAmplitudes[shiftIndex] = _evenSyncAmplitudes[shiftIndex] + syncAmplitude;
-	}
-}
-
-- (Float64)oddSyncAmplitudeForShiftIndex:(int)shiftIndex {
-	return _oddSyncAmplitudes[shiftIndex];
-}
-- (Float64)evenSyncAmplitudeForShiftIndex:(int)shiftIndex {
-	return _evenSyncAmplitudes[shiftIndex];
-}
-
-- (void)toggleCurrentStep {
-	_currentStep = (_currentStep == AirPhaseFilterStepOdd) ? AirPhaseFilterStepEven : AirPhaseFilterStepOdd;
-}
-
-- (int)currentPhase {
-	return [self maxSyncAmplitudeIndex];
-}
-
-- (int)maxSyncAmplitudeIndex {
-	Float64 maxAmplitude = 0;
-	int maxAmplitudeIndex = 0;
-	for (int even = 0; even < 2; even++) {
-		for (int i = 0; i < defaultShiftSteps; i++) {
-			Float64 amplitude = (even) ? _evenSyncAmplitudes[i] : _oddSyncAmplitudes[i];
-			if (amplitude > maxAmplitude) {
-				maxAmplitude = amplitude;
-				maxAmplitudeIndex = i;
-			}
-		}
-	}
-	return maxAmplitudeIndex;
-}
-
-- (void)reset {
-	for (int i = 0; i < defaultShiftSteps; i++) {
-		_oddSyncAmplitudes[i] = 0;
-		_evenSyncAmplitudes[i] = 0;
-	}
+- (uint8_t)wordForShiftIndex:(int)shiftIndex {
+	return _shiftedWords[shiftIndex];
 }
 
 @end
@@ -333,11 +230,11 @@ OSStatus RenderAudio(
 		
 		NSLog(@"---");
 		NSLog(@"Signal Processor Init");
-		NSLog(@"sampleRate:      %g", _sampleRate);
+		NSLog(@"sampleRate:       %g", _sampleRate);
 		NSLog(@"stepFrequency:   %5.3f", _stepFrequency);
 		NSLog(@"stepBitLength:     %u", (unsigned int)_stepBitLength);
 		NSLog(@"stepDataBitLength: %u", (unsigned int)_stepDataBitLength);
-		NSLog(@"bufferBitLength:  %u", (unsigned int)_bufferBitLength);
+		NSLog(@"bufferBitLength:   %u", (unsigned int)_bufferBitLength);
 		NSLog(@"---");
 		
 		// create data processing queue
@@ -349,9 +246,6 @@ OSStatus RenderAudio(
 		
 		// create signal word
 		_signalWord = [AirWord new];
-		
-		// create phase filter
-		_phaseFilter = [AirPhaseFilter new];
 		
 		// reset counters
 		_bufferBitRange.location = 0;
@@ -365,8 +259,6 @@ OSStatus RenderAudio(
 
 - (void)reset {
 	
-	[_phaseFilter reset];
-	
 	// reset counters
 	_bufferBitRange.location = 0;
 	_bufferBitRange.length = 0;
@@ -378,7 +270,6 @@ OSStatus RenderAudio(
 - (void)dealloc {
 	
 	_data_processing_queue = nil;
-	_phaseFilter = nil;
 	_signalWord = nil;
 	self.fftAnalyzer = nil;
 	[self removeAudioUnit];
@@ -532,30 +423,31 @@ OSStatus RenderAudio(
 	
 	NSLog(@"setup FFT Analyzer");
 	
-	Float32 *wordFrequencies = (Float32 *)malloc(wordFrequenciesCount * sizeof(Float32));
+	Float32 *frequencies = (Float32 *)malloc(frequenciesCount * sizeof(Float32));
 	
-	wordFrequencies[0] = word0Frequency;
-	wordFrequencies[1] = word1Frequency;
-	wordFrequencies[2] = word2Frequency;
-	wordFrequencies[3] = word3Frequency;
-	wordFrequencies[4] = word4Frequency;
-	wordFrequencies[5] = word5Frequency;
-	wordFrequencies[6] = word6Frequency;
-	wordFrequencies[7] = word7Frequency;
-	wordFrequencies[8] = word8Frequency;
-	wordFrequencies[9] = word9Frequency;
-	wordFrequencies[10] = word10Frequency;
-	wordFrequencies[11] = word11Frequency;
-	wordFrequencies[12] = word12Frequency;
-	wordFrequencies[13] = word13Frequency;
-	wordFrequencies[14] = word14Frequency;
-	wordFrequencies[15] = word15Frequency;
-	wordFrequencies[16] = word16Frequency;
-	wordFrequencies[17] = word17Frequency;
+	frequencies[0] = frequency_0;
+	frequencies[1] = frequency_1;
+	frequencies[2] = frequency_2;
+	frequencies[3] = frequency_3;
+	frequencies[4] = frequency_4;
+	frequencies[5] = frequency_5;
+	frequencies[6] = frequency_6;
+	frequencies[7] = frequency_7;
+	frequencies[8] = frequency_8;
+	frequencies[9] = frequency_9;
+	frequencies[10] = frequency_10;
+	frequencies[11] = frequency_11;
+	frequencies[12] = frequency_12;
+	frequencies[13] = frequency_13;
+	frequencies[14] = frequency_14;
+	frequencies[15] = frequency_15;
+	frequencies[16] = frequency_16;
+	frequencies[17] = frequency_17;
+	frequencies[18] = frequency_18;
 	
-	_fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength sampleRate:_sampleRate requiredFrequencies:wordFrequencies requiredFrequenciesCount:wordFrequenciesCount doplerCorrectionRange:doplerCorrection];
+	_fftAnalyzer = [[AirSignalFFTAnalyzer alloc] initWithNumberOfFrames:_stepDataBitLength sampleRate:_sampleRate requiredFrequencies:frequencies requiredFrequenciesCount:frequenciesCount doplerCorrectionRange:doplerCorrection];
 	
-	free(wordFrequencies);
+	free(frequencies);
 }
 
 
