@@ -154,8 +154,9 @@ OSStatus RenderAudio(
 				uint8_t word = maximumIndex;
 				[signalWord setWord:word forShiftIndex:shiftStep];
 				
-				printf(".");
 			}
+			
+			printf(".");
 			
 			[signalProcessor.delegate airSignalProcessorDidReceiveWord:signalWord];
 			

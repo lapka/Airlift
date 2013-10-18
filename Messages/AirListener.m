@@ -7,7 +7,7 @@
 
 #define shortMessageLengthInFrames 1
 #define longMessageLengthInFrames 5
-#define airBufferLength longMessageLengthInFrames + 2
+#define airBufferLength longMessageLengthInFrames + 3
 #define byteLength 8
 #define word4Length 4
 #define parallelBuffersCount 4
@@ -255,16 +255,19 @@
 
 - (BOOL)bufferContainsLongIntegralMessage:(uint8_t *)buffer {
 	
-	int sum = 0;
+	int calculated_crc_high = 0;
+	int calculated_crc_low = 0;
+	
+	// odd buffer value goes to low crc part, even goes high
 	for (int index = 1; index < (longMessageLengthInFrames + 1); index++) {
-		sum += buffer[index];
+		if (index % 2) calculated_crc_low ^= buffer[index];
+		else calculated_crc_high ^= buffer[index];
 	}
 	
-	uint8_t crc_from_sum = sum % 0x10;
-	uint8_t inverse_crc_from_sum = 0xf - crc_from_sum;
-	uint8_t crc_word = buffer[longMessageLengthInFrames + 1];
+	uint8_t given_crc_high = buffer[longMessageLengthInFrames + 1];
+	uint8_t given_crc_low = buffer[longMessageLengthInFrames + 2];
 	
-	BOOL bufferContainsLongIntegralMessage = (crc_word == inverse_crc_from_sum);
+	BOOL bufferContainsLongIntegralMessage = (given_crc_high == calculated_crc_high) && (given_crc_low == calculated_crc_low);
 	return bufferContainsLongIntegralMessage;
 }
 
