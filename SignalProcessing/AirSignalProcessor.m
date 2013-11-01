@@ -242,8 +242,8 @@ OSStatus RenderAudio(
 		_data_processing_queue = dispatch_queue_create("com.mylapka.air_signal_data_processing_queue", NULL);
 
 		// alloc buffers
-		_buffer = (Float32 *) malloc(_bufferBitLength * sizeof(Float32));
-		_stepData = (Float32 *) malloc(_stepDataBitLength * sizeof(Float32));
+		_buffer = (Float32 *)malloc(_bufferBitLength * sizeof(Float32));
+		_stepData = (_stepDataBitLength) ? (Float32 *)malloc(_stepDataBitLength * sizeof(Float32)) : nil;
 		
 		// create signal word
 		_signalWord = [AirWord new];

@@ -61,7 +61,7 @@
 		_doplerCorrectionRange = doplerCorrectionRange;
 		
 		// Create amplitudes array
-		_amplitudes = (Float32 *) malloc(_required_bins_count * sizeof(Float32));
+		_amplitudes = (_required_bins_count) ? (Float32 *)malloc(_required_bins_count * sizeof(Float32)) : nil;
 	}
 	return self;
 }
