@@ -6,7 +6,7 @@
 #import "AirListener.h"
 
 #define shortMessageLengthInFrames 1
-#define longMessageLengthInFrames 5
+#define longMessageLengthInFrames 6
 #define airBufferLength longMessageLengthInFrames + 3
 #define byteLength 8
 #define word4Length 4
