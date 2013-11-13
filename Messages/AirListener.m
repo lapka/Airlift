@@ -258,10 +258,10 @@
 	int calculated_crc_high = 0;
 	int calculated_crc_low = 0;
 	
-	// odd buffer value goes to low crc part, even goes high
+	// odd buffer value goes to high crc part, even goes low
 	for (int index = 1; index < (longMessageLengthInFrames + 1); index++) {
-		if (index % 2) calculated_crc_low ^= buffer[index];
-		else calculated_crc_high ^= buffer[index];
+		if (index % 2) calculated_crc_high ^= buffer[index];
+		else calculated_crc_low ^= buffer[index];
 	}
 	
 	uint8_t given_crc_high = buffer[longMessageLengthInFrames + 1];
