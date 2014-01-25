@@ -8,6 +8,8 @@
 #define shortMessageLengthInFrames 1
 #define longMessageLengthInFrames 6
 #define airBufferLength longMessageLengthInFrames + 3
+#define shortMessageMarkerIndex airBufferLength - 4
+#define longMessageMarkerIndex 0
 #define byteLength 8
 #define word4Length 4
 #define parallelBuffersCount 4
@@ -20,14 +22,15 @@
 
 @implementation AirMessage
 
-+ (AirMessage *)messageWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort {
-	AirMessage *message = [[AirMessage alloc] initWithData:data isShort:isShort];
++ (AirMessage *)messageWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort followedBySameMarker:(BOOL)followedBySameMarker {
+	AirMessage *message = [[AirMessage alloc] initWithData:data isShort:isShort followedBySameMarker:followedBySameMarker];
 	return message;
 }
 
-- (id)initWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort {
+- (id)initWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort followedBySameMarker:(BOOL)followedBySameMarker {
 	if ((self = [super init])) {
 		_isShort = isShort;
+		_followedBySameMarker = followedBySameMarker;
 		int bitArrayLength = isShort ? shortMessageLengthInFrames * word4Length : longMessageLengthInFrames * word4Length;
 		_data = bit_array_create(bitArrayLength);
 		bit_array_copy(_data, 0, data, 0, bitArrayLength);
@@ -201,16 +204,28 @@
 	// on each parallel buffer
 	for (int parallelIndex = 0; parallelIndex < parallelBuffersCount; parallelIndex++) {
 		uint8_t *parallelBuffer = [buffer parallelBufferAtIndex:parallelIndex];
-		uint8_t first_word = [buffer wordAtIndex:0 parallelIndex:parallelIndex];
+		uint8_t short_message_marker_pretendent = [buffer wordAtIndex:shortMessageMarkerIndex parallelIndex:parallelIndex];
+		uint8_t long_message_marker_pretendent = [buffer wordAtIndex:longMessageMarkerIndex parallelIndex:parallelIndex];
 		
-		if ([self wordIsMarker:first_word]) {
-			BOOL messageIsShort = (first_word == AirWordValue_Marker_1);
-			BOOL bufferContainsIntegralMessage = messageIsShort ? [self bufferContainsShortIntegralMessage:parallelBuffer] : [self bufferContainsLongIntegralMessage:parallelBuffer];
+		if ([self wordIsShortMessageMarker:short_message_marker_pretendent]) {
+			BOOL bufferContainsIntegralMessage = [self bufferContainsShortIntegralMessage:parallelBuffer];
 			if (bufferContainsIntegralMessage) {
-				int wordsCount = messageIsShort ? shortMessageLengthInFrames : longMessageLengthInFrames;
-				BIT_ARRAY *messageData = [self bitArrayFromWordsArray:parallelBuffer withStartWordIndex:1 wordsCount:wordsCount];
-				AirMessage *message = [AirMessage messageWithData:messageData isShort:messageIsShort];
-				message.markerID = first_word;
+				BOOL followedBySameMarker = [self bufferContainsShortMessageFollowedBySameMarker:parallelBuffer];
+				BIT_ARRAY *messageData = [self bitArrayFromWordsArray:parallelBuffer withStartWordIndex:(shortMessageMarkerIndex + 1) wordsCount:shortMessageLengthInFrames];
+				AirMessage *message = [AirMessage messageWithData:messageData isShort:YES followedBySameMarker:followedBySameMarker];
+				message.markerID = short_message_marker_pretendent;
+				message.time = [NSDate date];
+				bit_array_free(messageData);
+				return message;
+			}
+		}
+		
+		if ([self wordIsLongMessageMarker:long_message_marker_pretendent]) {
+			BOOL bufferContainsIntegralMessage = [self bufferContainsLongIntegralMessage:parallelBuffer];
+			if (bufferContainsIntegralMessage) {
+				BIT_ARRAY *messageData = [self bitArrayFromWordsArray:parallelBuffer withStartWordIndex:(longMessageMarkerIndex + 1) wordsCount:longMessageLengthInFrames];
+				AirMessage *message = [AirMessage messageWithData:messageData isShort:NO followedBySameMarker:NO];
+				message.markerID = long_message_marker_pretendent;
 				message.time = [NSDate date];
 				bit_array_free(messageData);
 				return message;
@@ -236,20 +251,34 @@
 }
 
 
-- (BOOL)wordIsMarker:(uint8_t)word {
-	return (word == AirWordValue_Marker_1) || (word == AirWordValue_Marker_2) || (word == AirWordValue_Marker_3);
+- (BOOL)wordIsShortMessageMarker:(uint8_t)word {
+	return (word == AirWordValue_Marker_1);
+}
+
+
+- (BOOL)wordIsLongMessageMarker:(uint8_t)word {
+	return (word == AirWordValue_Marker_2) || (word == AirWordValue_Marker_3);
 }
 
 
 - (BOOL)bufferContainsShortIntegralMessage:(uint8_t *)buffer {
 	
-	uint8_t informative_word = buffer[1];
+	uint8_t informative_word = buffer[shortMessageMarkerIndex + 1];
 	uint8_t inverse_informative_word = 0xf - informative_word;
-	uint8_t crc_word = buffer[2];
+	uint8_t crc_word = buffer[shortMessageMarkerIndex + 2];
 	
 	BOOL bufferContainsShortIntegralMessage = (crc_word == inverse_informative_word);
 	return bufferContainsShortIntegralMessage;
+}
 
+
+- (BOOL)bufferContainsShortMessageFollowedBySameMarker:(uint8_t *)buffer {
+	
+	uint8_t marker_word = buffer[shortMessageMarkerIndex];
+	uint8_t followed_word = buffer[shortMessageMarkerIndex + 3];
+	
+	BOOL bufferContainsShortMessageFollowedBySameMarker = (marker_word == followed_word);
+	return bufferContainsShortMessageFollowedBySameMarker;
 }
 
 

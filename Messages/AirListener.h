@@ -13,11 +13,12 @@
 }
 @property BOOL isShort;
 @property int markerID;
+@property BOOL followedBySameMarker;
 @property (strong) NSDate *time;
-- (id)initWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort;
+- (id)initWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort followedBySameMarker:(BOOL)followedBySameMarker;
 - (BIT_ARRAY *)data;
 
-+ (AirMessage *)messageWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort;
++ (AirMessage *)messageWithData:(BIT_ARRAY *)data isShort:(BOOL)isShort followedBySameMarker:(BOOL)followedBySameMarker;
 
 @end
 
