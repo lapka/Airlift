@@ -186,6 +186,10 @@
 	
 	[_buffer pushAirWord:word];
 	
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self.delegate airListenerDidProcessWord];
+	});
+	
 	if (_shouldIgnoreMessageAtNextRecognitionStep) {
 		_shouldIgnoreMessageAtNextRecognitionStep = NO;
 		return;

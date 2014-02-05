@@ -37,6 +37,8 @@
 
 @protocol AirListenerDelegate <NSObject>
 - (void)airListenerDidReceiveMessage:(AirMessage *)message;
+@optional;
+- (void)airListenerDidProcessWord;
 @end
 
 
