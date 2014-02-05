@@ -40,9 +40,7 @@
 @end
 
 
-@interface AirListener : NSObject <AirSignalProcessorDelegate> {
-	dispatch_queue_t _message_recognition_queue;
-}
+@interface AirListener : NSObject <AirSignalProcessorDelegate>
 
 @property (nonatomic, strong) AirSignalProcessor *airSignalProcessor;
 @property (nonatomic, weak) NSObject <AirListenerDelegate> *delegate;

@@ -121,7 +121,14 @@
 
 
 
+
 #pragma mark -
+
+
+@interface AirListener ()
+// this flag is used to avoid recognition of same message shifted to next step
+@property BOOL shouldIgnoreMessageAtNextRecognitionStep;
+@end
 
 
 @implementation AirListener
@@ -133,9 +140,6 @@
 		_buffer = [AirBuffer new];
 		_airSignalProcessor = [AirSignalProcessor new];
 		_airSignalProcessor.delegate = self;
-		
-		// create data processing queue
-		_message_recognition_queue = dispatch_queue_create("com.mylapka.air_signal_message_recognition_queue", NULL);
 	}
 	return self;
 }
@@ -144,7 +148,6 @@
 - (void)dealloc {
 
 	self.airSignalProcessor = nil;
-	_message_recognition_queue = nil;
 }
 
 
@@ -183,15 +186,18 @@
 	
 	[_buffer pushAirWord:word];
 	
-	dispatch_async(_message_recognition_queue, ^{
+	if (_shouldIgnoreMessageAtNextRecognitionStep) {
+		_shouldIgnoreMessageAtNextRecognitionStep = NO;
+		return;
+	}
 		
-		AirMessage *message = [self messageAtBuffer:_buffer];
-		if (message == nil) return;
-					
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[self.delegate airListenerDidReceiveMessage:message];
-		});
-
+	AirMessage *message = [self messageAtBuffer:_buffer];
+	if (message == nil) return;
+	
+	_shouldIgnoreMessageAtNextRecognitionStep = YES;
+				
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self.delegate airListenerDidReceiveMessage:message];
 	});
 }
 
