@@ -6,7 +6,6 @@
 #import "AirListener.h"
 
 #define shortMessageLengthInFrames 1
-#define longMessageLengthInFrames 6
 #define airBufferLength longMessageLengthInFrames + 3
 #define shortMessageMarkerIndex airBufferLength - 4
 #define longMessageMarkerIndex 0

@@ -8,6 +8,9 @@
 #include "bit_array.h"
 
 
+#define longMessageLengthInFrames 6
+
+
 @interface AirMessage : NSObject {
 	BIT_ARRAY *_data;
 }
