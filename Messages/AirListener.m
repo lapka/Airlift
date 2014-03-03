@@ -186,7 +186,8 @@
 	[_buffer pushAirWord:word];
 	
 	dispatch_async(dispatch_get_main_queue(), ^{
-		[self.delegate airListenerDidProcessWord];
+		if ([self.delegate respondsToSelector:@selector(airListenerDidProcessWord)])
+			[self.delegate airListenerDidProcessWord];
 	});
 	
 	if (_shouldIgnoreMessageAtNextRecognitionStep) {
